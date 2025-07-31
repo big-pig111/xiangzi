@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meme Coin Countdown</title>
+    <!-- 
+        生产环境警告：请替换为本地Tailwind CSS构建版本
+        安装方法：npm install tailwindcss && npx tailwindcss build
+        或使用CDN的压缩版本用于快速原型开发
+    -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     
@@ -2409,7 +2414,18 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    // 尝试获取详细错误信息
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorBody = await response.text();
+                        if (errorBody) {
+                            console.error('Firebase Functions错误详情:', errorBody);
+                            errorMessage += '\n详情: ' + errorBody;
+                        }
+                    } catch (e) {
+                        console.error('无法读取错误详情:', e);
+                    }
+                    throw new Error(errorMessage);
                 }
                 
                 const result = await response.json();
@@ -2446,6 +2462,12 @@
                     alert('❌ Firebase Functions未部署或不可用，请联系管理员');
                 } else if (error.message && error.message.includes('hasOwnProperty')) {
                     alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
+                } else if (error.message && error.message.includes('HTTP 500')) {
+                    alert('❌ 服务器内部错误：\n• Firebase Functions可能未正确部署\n• 检查云函数日志获取详细信息\n• 联系管理员检查后端服务');
+                } else if (error.message && error.message.includes('HTTP 404')) {
+                    alert('❌ 云函数未找到：\n• claimGameReward函数可能未部署\n• 检查函数名称和地区设置');
+                } else if (error.message && error.message.includes('HTTP 403')) {
+                    alert('❌ 权限被拒绝：\n• 检查Firebase安全规则\n• 确认函数访问权限设置');
                 } else {
                     alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
                 }
@@ -2505,7 +2527,18 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    // 尝试获取详细错误信息
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorBody = await response.text();
+                        if (errorBody) {
+                            console.error('Firebase Functions错误详情:', errorBody);
+                            errorMessage += '\n详情: ' + errorBody;
+                        }
+                    } catch (e) {
+                        console.error('无法读取错误详情:', e);
+                    }
+                    throw new Error(errorMessage);
                 }
                 
                 const result = await response.json();
@@ -2542,6 +2575,12 @@
                     alert('❌ Firebase Functions未部署或不可用，请联系管理员');
                 } else if (error.message && error.message.includes('hasOwnProperty')) {
                     alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
+                } else if (error.message && error.message.includes('HTTP 500')) {
+                    alert('❌ 服务器内部错误：\n• Firebase Functions可能未正确部署\n• 检查云函数日志获取详细信息\n• 联系管理员检查后端服务');
+                } else if (error.message && error.message.includes('HTTP 404')) {
+                    alert('❌ 云函数未找到：\n• claimGameReward函数可能未部署\n• 检查函数名称和地区设置');
+                } else if (error.message && error.message.includes('HTTP 403')) {
+                    alert('❌ 权限被拒绝：\n• 检查Firebase安全规则\n• 确认函数访问权限设置');
                 } else {
                     alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
                 }
