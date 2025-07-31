@@ -2499,31 +2499,36 @@
                 // 注意：Callable Functions要求参数必须是单个对象，不需要再包装在data中
                 console.log('调用前最终检查 - requestData:', JSON.stringify(requestData, null, 2));
                 
-                // 尝试简化的调用方式测试
-                console.log('=== 测试简化参数传递 ===');
+                // 强制显示调试信息
                 const testParams = {
                     wallet: '6btAW2SbJQKtwKRebiUuXA2fPv7MAVYJD1tgCvBx6GB5',
                     rewardType: 'top20',
                     roundId: 'test-123'
                 };
-                console.log('测试参数:', testParams);
-                console.log('测试参数JSON:', JSON.stringify(testParams));
                 
-                // 调试Firebase Functions实例
-                console.log('=== Firebase Functions实例调试 ===');
+                alert(`🔍 调试信息：
+                
+测试参数:
+- wallet: ${testParams.wallet}
+- rewardType: ${testParams.rewardType}  
+- roundId: ${testParams.roundId}
+
+functions对象存在: ${!!functions}
+functions类型: ${typeof functions}
+
+即将调用Firebase Function...`);
+                
+                console.log('=== 强制调试信息 ===');
+                console.log('testParams:', testParams);
                 console.log('functions对象:', functions);
-                console.log('functions类型:', typeof functions);
-                console.log('functions构造函数:', functions.constructor.name);
-                console.log('functions._delegate:', functions._delegate);
-                console.log('functions.region:', functions._delegate?._region || 'unknown');
                 
                 const claimGameReward = functions.httpsCallable('claimGameReward');
-                console.log('开始调用Firebase Function...');
-                console.log('claimGameReward函数:', claimGameReward);
-                console.log('claimGameReward类型:', typeof claimGameReward);
+                console.log('claimGameReward创建成功:', !!claimGameReward);
                 
                 // 先尝试简化的测试参数
+                alert('正在调用Firebase Function...');
                 const result = await claimGameReward(testParams);
+                alert('Firebase Function调用完成，查看控制台结果');
                 console.log('Firebase Function调用结果:', result);
                 
                 // Callable Function直接返回结果，不需要检查response.ok
