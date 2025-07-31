@@ -2339,17 +2339,67 @@
                 return;
             }
             
-            // 直接启用按钮，让用户尝试领取
-            document.getElementById('claimTop20Btn').disabled = false;
-            document.getElementById('claimLastSuccessBtn').disabled = false;
+            // 获取钱包地址
+            const walletAddress = window.walletManager.currentWallet?.address || 
+                                window.walletManager.currentWallet?.publicKey || 
+                                String(window.walletManager.currentWallet || '');
             
-            // 设置默认显示信息
-            document.getElementById('top20Status').innerHTML = '<span class="text-blue-400">💡 点击按钮尝试领取奖励</span>';
-            document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-blue-400">💡 点击按钮尝试领取奖励</span>';
+            if (!walletAddress || walletAddress === 'undefined') {
+                document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 钱包地址无效</span>';
+                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 钱包地址无效</span>';
+                document.getElementById('claimTop20Btn').disabled = true;
+                document.getElementById('claimLastSuccessBtn').disabled = true;
+                return;
+            }
             
-            // 设置默认奖励数量显示
-            document.getElementById('top20Reward').textContent = '30000 TOKENS';
-            document.getElementById('lastSuccessReward').textContent = '100000 TOKENS';
+            try {
+                // 验证前20持有者资格
+                const top20Eligibility = await validateTop20Eligibility(walletAddress);
+                const top20Claimed = await checkTop20Claimed(walletAddress);
+                
+                if (top20Claimed) {
+                    document.getElementById('top20Status').innerHTML = '<span class="text-green-400">✅ 已领取前20持有者奖励</span>';
+                    document.getElementById('claimTop20Btn').disabled = true;
+                    document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">✅ 已领取</span>';
+                } else if (top20Eligibility.eligible) {
+                    document.getElementById('top20Status').innerHTML = '<span class="text-green-400">🎉 您有资格领取前20持有者奖励！</span>';
+                    document.getElementById('claimTop20Btn').disabled = false;
+                    document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">🏆 领取前20名奖励</span>';
+                } else {
+                    document.getElementById('top20Status').innerHTML = `<span class="text-red-400">❌ ${top20Eligibility.reason}</span>`;
+                    document.getElementById('claimTop20Btn').disabled = true;
+                    document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">❌ 无资格</span>';
+                }
+                
+                // 验证最后大额买入者资格
+                const lastBuyerEligibility = await validateLastBuyerEligibility(walletAddress);
+                const lastBuyerClaimed = await checkLastBuyerClaimed(walletAddress);
+                
+                if (lastBuyerClaimed) {
+                    document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-green-400">✅ 已领取最后倒计时奖励</span>';
+                    document.getElementById('claimLastSuccessBtn').disabled = true;
+                    document.getElementById('claimLastSuccessBtn').innerHTML = '<span class="text-white">✅ 已领取</span>';
+                } else if (lastBuyerEligibility.eligible) {
+                    document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-green-400">🎉 您有资格领取最后倒计时奖励！</span>';
+                    document.getElementById('claimLastSuccessBtn').disabled = false;
+                    document.getElementById('claimLastSuccessBtn').innerHTML = '<span class="text-white">💰 领取最后倒计时奖励</span>';
+                } else {
+                    document.getElementById('lastSuccessStatus').innerHTML = `<span class="text-red-400">❌ ${lastBuyerEligibility.reason}</span>`;
+                    document.getElementById('claimLastSuccessBtn').disabled = true;
+                    document.getElementById('claimLastSuccessBtn').innerHTML = '<span class="text-white">❌ 无资格</span>';
+                }
+                
+            } catch (error) {
+                console.error('更新奖励页面数据失败:', error);
+                document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 验证失败，请重试</span>';
+                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 验证失败，请重试</span>';
+                document.getElementById('claimTop20Btn').disabled = true;
+                document.getElementById('claimLastSuccessBtn').disabled = true;
+            }
+            
+            // 设置奖励数量显示
+            document.getElementById('top20Reward').textContent = '3000 积分';
+            document.getElementById('lastSuccessReward').textContent = '10000 积分';
         }
 
         // 验证地址功能
@@ -2423,8 +2473,24 @@
             }
             
             try {
-                // 先给用户添加3000积分（前20持有者奖励）
-                console.log('给用户添加3000积分...');
+                // 验证用户是否有资格领取前20持有者奖励
+                console.log('验证用户资格...');
+                
+                // 检查是否在持仓前20中
+                const isTop20 = await validateTop20Eligibility(walletAddress);
+                if (!isTop20.eligible) {
+                    alert(`❌ 您没有资格领取前20持有者奖励：\n${isTop20.reason}`);
+                    return;
+                }
+                
+                // 检查是否已经领取过
+                const hasClaimed = await checkTop20Claimed(walletAddress);
+                if (hasClaimed) {
+                    alert('❌ 您已经领取过前20持有者奖励，无法重复领取！');
+                    return;
+                }
+                
+                console.log('验证通过，开始添加积分...');
                 
                 // 使用Firebase Realtime Database直接添加积分
                 const userRef = firebase.database().ref(`users/${walletAddress}`);
@@ -2438,6 +2504,9 @@
                     score: newScore,
                     lastUpdated: Date.now()
                 });
+                
+                // 记录领取记录
+                await recordTop20Claim(walletAddress);
                 
                 console.log(`积分更新成功: ${currentScore} -> ${newScore}`);
                 
@@ -2490,8 +2559,24 @@
             }
             
             try {
-                // 给用户添加10000积分（最后倒计时奖励）
-                console.log('给用户添加10000积分...');
+                // 验证用户是否有资格领取最后倒计时奖励
+                console.log('验证用户资格...');
+                
+                // 检查是否是最后大额买入地址
+                const isLastBuyer = await validateLastBuyerEligibility(walletAddress);
+                if (!isLastBuyer.eligible) {
+                    alert(`❌ 您没有资格领取最后倒计时奖励：\n${isLastBuyer.reason}`);
+                    return;
+                }
+                
+                // 检查是否已经领取过
+                const hasClaimed = await checkLastBuyerClaimed(walletAddress);
+                if (hasClaimed) {
+                    alert('❌ 您已经领取过最后倒计时奖励，无法重复领取！');
+                    return;
+                }
+                
+                console.log('验证通过，开始添加积分...');
                 
                 // 使用Firebase Realtime Database直接添加积分
                 const userRef = firebase.database().ref(`users/${walletAddress}`);
@@ -2505,6 +2590,9 @@
                     score: newScore,
                     lastUpdated: Date.now()
                 });
+                
+                // 记录领取记录
+                await recordLastBuyerClaim(walletAddress);
                 
                 console.log(`积分更新成功: ${currentScore} -> ${newScore}`);
                 
@@ -2635,6 +2723,180 @@
 
         // 监控功能已移至管理面板
 
+        // 验证前20持有者资格
+        async function validateTop20Eligibility(walletAddress) {
+            try {
+                console.log('验证前20持有者资格:', walletAddress);
+                
+                // 检查是否有持仓数据
+                if (!window.solanaTracker || !window.solanaTracker.currentHolderRewardRoundId) {
+                    return {
+                        eligible: false,
+                        reason: '暂无持仓奖励轮次数据，请等待游戏开始'
+                    };
+                }
+                
+                // 获取当前持仓奖励轮次数据
+                const roundId = window.solanaTracker.currentHolderRewardRoundId;
+                const roundRef = firebase.database().ref(`holderRewardRounds/${roundId}`);
+                const roundSnap = await roundRef.once('value');
+                const roundData = roundSnap.val();
+                
+                if (!roundData || !roundData.top20Holders) {
+                    return {
+                        eligible: false,
+                        reason: '持仓数据不存在或无效'
+                    };
+                }
+                
+                // 检查是否在持仓前20中
+                const isTop20 = roundData.top20Holders.some(holder => 
+                    holder.address === walletAddress
+                );
+                
+                if (!isTop20) {
+                    return {
+                        eligible: false,
+                        reason: '您的地址不在持仓前20持有者中'
+                    };
+                }
+                
+                return { eligible: true };
+                
+            } catch (error) {
+                console.error('验证前20持有者资格失败:', error);
+                return {
+                    eligible: false,
+                    reason: '验证过程中发生错误: ' + error.message
+                };
+            }
+        }
+        
+        // 检查前20持有者是否已领取
+        async function checkTop20Claimed(walletAddress) {
+            try {
+                const roundId = window.solanaTracker?.currentHolderRewardRoundId;
+                if (!roundId) return false;
+                
+                const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                const claimedSnap = await claimedRef.once('value');
+                return claimedSnap.exists();
+                
+            } catch (error) {
+                console.error('检查前20持有者领取状态失败:', error);
+                return false;
+            }
+        }
+        
+        // 记录前20持有者领取
+        async function recordTop20Claim(walletAddress) {
+            try {
+                const roundId = window.solanaTracker?.currentHolderRewardRoundId;
+                if (!roundId) return;
+                
+                const claimData = {
+                    wallet: walletAddress,
+                    roundId: roundId,
+                    rewardType: 'top20',
+                    amount: 3000,
+                    claimedAt: Date.now()
+                };
+                
+                const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                await claimedRef.set(claimData);
+                
+                console.log('前20持有者领取记录已保存');
+                
+            } catch (error) {
+                console.error('记录前20持有者领取失败:', error);
+            }
+        }
+        
+        // 验证最后大额买入者资格
+        async function validateLastBuyerEligibility(walletAddress) {
+            try {
+                console.log('验证最后大额买入者资格:', walletAddress);
+                
+                // 检查是否有游戏轮次数据
+                if (!window.solanaTracker || !window.solanaTracker.currentRoundId) {
+                    return {
+                        eligible: false,
+                        reason: '暂无游戏轮次数据，请等待游戏开始'
+                    };
+                }
+                
+                // 获取当前游戏轮次数据
+                const roundId = window.solanaTracker.currentRoundId;
+                const roundRef = firebase.database().ref(`gameRounds/${roundId}`);
+                const roundSnap = await roundRef.once('value');
+                const roundData = roundSnap.val();
+                
+                if (!roundData || !roundData.lastBigBuyAddress) {
+                    return {
+                        eligible: false,
+                        reason: '游戏数据不存在或无效'
+                    };
+                }
+                
+                // 检查是否是最后大额买入地址
+                if (roundData.lastBigBuyAddress !== walletAddress) {
+                    return {
+                        eligible: false,
+                        reason: '您不是最后大额买入地址'
+                    };
+                }
+                
+                return { eligible: true };
+                
+            } catch (error) {
+                console.error('验证最后大额买入者资格失败:', error);
+                return {
+                    eligible: false,
+                    reason: '验证过程中发生错误: ' + error.message
+                };
+            }
+        }
+        
+        // 检查最后大额买入者是否已领取
+        async function checkLastBuyerClaimed(walletAddress) {
+            try {
+                const roundId = window.solanaTracker?.currentRoundId;
+                if (!roundId) return false;
+                
+                const claimedRef = firebase.database().ref(`claimedRewards/countdown/${roundId}/${walletAddress}`);
+                const claimedSnap = await claimedRef.once('value');
+                return claimedSnap.exists();
+                
+            } catch (error) {
+                console.error('检查最后大额买入者领取状态失败:', error);
+                return false;
+            }
+        }
+        
+        // 记录最后大额买入者领取
+        async function recordLastBuyerClaim(walletAddress) {
+            try {
+                const roundId = window.solanaTracker?.currentRoundId;
+                if (!roundId) return;
+                
+                const claimData = {
+                    wallet: walletAddress,
+                    roundId: roundId,
+                    rewardType: 'countdown',
+                    amount: 10000,
+                    claimedAt: Date.now()
+                };
+                
+                const claimedRef = firebase.database().ref(`claimedRewards/countdown/${roundId}/${walletAddress}`);
+                await claimedRef.set(claimData);
+                
+                console.log('最后大额买入者领取记录已保存');
+                
+            } catch (error) {
+                console.error('记录最后大额买入者领取失败:', error);
+            }
+        }
+        
         // 积分兑换代币函数（使用成功的claimToken）
         async function claimTokenHandler() {
             console.log('=== 开始积分兑换代币 ===');
