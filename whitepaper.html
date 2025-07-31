@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEME代币游戏白皮书</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Comic Neue', cursive;
+            line-height: 1.6;
+            color: #fff;
+            background: #111827;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 背景装饰元素 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            width: 80px;
+            height: 80px;
+            background: #FF2E63;
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: spin 8s linear infinite;
+            z-index: -1;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: 80px;
+            right: 40px;
+            width: 128px;
+            height: 128px;
+            background: #08D9D6;
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: spin 8s linear infinite;
+            z-index: -1;
+        }
+
+        /* 漂浮的MEME文字 */
+        .floating-meme {
+            position: fixed;
+            font-size: 3rem;
+            font-weight: bold;
+            opacity: 0.2;
+            animation: float 3s ease-in-out infinite;
+            z-index: -1;
+        }
+
+        .floating-meme:nth-child(1) {
+            top: 80px;
+            right: 80px;
+            color: #9D4EDD;
+            transform: rotate(12deg);
+        }
+
+        .floating-meme:nth-child(2) {
+            bottom: 160px;
+            left: 80px;
+            color: #4CAF50;
+            transform: rotate(-6deg);
+            animation-delay: 1s;
+        }
+
+        .floating-meme:nth-child(3) {
+            top: 50%;
+            left: 40px;
+            color: #FF2E63;
+            transform: rotate(6deg);
+            animation-delay: 0.5s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(12deg); }
+            50% { transform: translateY(-10px) rotate(12deg); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .whitepaper-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            border: 4px solid #000;
+            border-radius: 12px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 0;
+            border-bottom: 4px solid #FFDD00;
+        }
+
+        .header h1 {
+            font-size: clamp(2.5rem, 8vw, 4rem);
+            color: #FFDD00;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 0px #000;
+            transform: rotate(-2deg);
+        }
+
+        .header .subtitle {
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
+            color: #fff;
+            font-style: italic;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .version-info {
+            background: #374151;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border-left: 4px solid #FFDD00;
+            border: 4px solid #000;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            border: 4px solid #000;
+            border-radius: 12px;
+            position: relative;
+            transform: rotate(-1deg);
+        }
+
+        .section:nth-child(even) {
+            transform: rotate(1deg);
+        }
+
+        .section h2 {
+            color: #FF2E63;
+            font-size: clamp(1.5rem, 5vw, 2.5rem);
+            margin-bottom: 20px;
+            border-bottom: 4px solid #FF2E63;
+            padding-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .section h3 {
+            color: #08D9D6;
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            margin: 25px 0 15px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .section p {
+            margin-bottom: 15px;
+            text-align: justify;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .feature-list li {
+            background: #374151;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 12px;
+            border: 4px solid #000;
+            border-left: 4px solid #FFDD00;
+            position: relative;
+            transform: rotate(-1deg);
+            transition: all 0.3s ease;
+        }
+
+        .feature-list li:hover {
+            transform: rotate(0deg) scale(1.02);
+            box-shadow: 0 0 15px rgba(255, 221, 0, 0.7);
+        }
+
+        .feature-list li::before {
+            content: "🚀";
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .tech-item {
+            background: linear-gradient(135deg, #9D4EDD, #FF2E63);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 4px solid #000;
+            transform: rotate(-2deg);
+            transition: all 0.3s ease;
+        }
+
+        .tech-item:hover {
+            transform: rotate(0deg) scale(1.05);
+            box-shadow: 0 0 15px rgba(157, 78, 221, 0.7);
+        }
+
+        .tech-item h4 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .game-mechanics {
+            background: linear-gradient(135deg, #FFDD00, #FF2E63);
+            padding: 25px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border: 4px solid #000;
+            transform: rotate(2deg);
+        }
+
+        .game-mechanics h3 {
+            color: #000;
+            text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.3);
+        }
+
+        .game-mechanics p {
+            color: #000;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        .reward-system {
+            background: linear-gradient(135deg, #08D9D6, #4CAF50);
+            padding: 25px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border: 4px solid #000;
+            transform: rotate(-2deg);
+        }
+
+        .reward-system h3 {
+            color: #000;
+            text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.3);
+        }
+
+        .reward-system p {
+            color: #000;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        .roadmap {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .roadmap-item {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border: 4px solid #FFDD00;
+            text-align: center;
+            transform: rotate(1deg);
+            transition: all 0.3s ease;
+        }
+
+        .roadmap-item:hover {
+            transform: rotate(0deg) scale(1.02);
+            box-shadow: 0 0 15px rgba(255, 221, 0, 0.7);
+        }
+
+        .roadmap-item h4 {
+            color: #FFDD00;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .roadmap-item ul {
+            text-align: left;
+            margin-top: 10px;
+            color: #fff;
+        }
+
+        .roadmap-item li {
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #374151;
+        }
+
+        .close-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #FF2E63, #9D4EDD);
+            color: white;
+            border: 4px solid #000;
+            padding: 15px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-family: 'Comic Sans MS', 'Comic Neue', cursive;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            transform: rotate(-2deg);
+            z-index: 99999;
+        }
+
+        .close-btn:hover {
+            transform: rotate(0deg) translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 46, 99, 0.5);
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #FFDD00, #FF2E63);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #000;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        .warning {
+            background: linear-gradient(135deg, #FFDD00, #FF2E63);
+            border: 4px solid #000;
+            color: #000;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            transform: rotate(-1deg);
+        }
+
+        .success {
+            background: linear-gradient(135deg, #4CAF50, #08D9D6);
+            border: 4px solid #000;
+            color: #000;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            transform: rotate(1deg);
+        }
+
+        .success strong, .warning strong {
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        .success ul, .warning ul {
+            margin-top: 10px;
+            color: #000;
+        }
+
+        .success li, .warning li {
+            margin: 5px 0;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        /* 装饰元素 */
+        .section::before {
+            content: '🚀';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            font-size: 2rem;
+            background: #FF2E63;
+            padding: 5px;
+            border: 4px solid #000;
+            border-radius: 8px;
+            transform: rotate(-15deg);
+        }
+
+        .section:nth-child(even)::before {
+            content: '💎';
+            background: #08D9D6;
+            transform: rotate(15deg);
+        }
+
+        @media (max-width: 768px) {
+            .whitepaper-container {
+                margin: 10px;
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .section h2 {
+                font-size: 1.5rem;
+            }
+
+            .tech-stack {
+                grid-template-columns: 1fr;
+            }
+
+            .floating-meme {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 漂浮的MEME文字 -->
+    <div class="floating-meme">MEME</div>
+    <div class="floating-meme">TO THE MOON</div>
+    <div class="floating-meme">HODL</div>
+    
+    <button class="close-btn" onclick="closeWhitepaper()">关闭白皮书</button>
+    
+    <div class="whitepaper-container">
+        <div class="header">
+            <h1>🚀 MEME TO THE MOON 白皮书 🚀</h1>
+            <p class="subtitle">基于Solana区块链的MEME代币游戏生态系统</p>
+        </div>
+
+        <div class="version-info">
+            <strong>🚀 版本：</strong>1.0.0 | <strong>📅 发布日期：</strong>2024年 | <strong>🔄 更新日期：</strong>2024年
+        </div>
+
+        <div class="section">
+            <h2>📋 目录</h2>
+            <ul class="feature-list">
+                <li>项目概述</li>
+                <li>游戏机制</li>
+                <li>奖励系统</li>
+                <li>技术架构</li>
+                <li>安全机制</li>
+                <li>发展路线图</li>
+                <li>风险提示</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🎯 项目概述</h2>
+            <p>
+                <span class="highlight">MEME TO THE MOON</span>是一个基于Solana区块链构建的疯狂MEME代币游戏生态系统，
+                旨在通过游戏化的方式让用户参与代币交易和社区建设。项目结合了DeFi、游戏化和社交元素，
+                创造了一个独特的数字资产体验。🚀💎
+            </p>
+            
+            <h3>核心愿景</h3>
+            <p>
+                打造一个公平、透明、有趣的代币游戏平台，让每个参与者都能在娱乐中学习区块链知识，
+                在游戏中获得实际收益，在社区中建立价值连接。我们的目标是：<strong>TO THE MOON! 🌙</strong>
+            </p>
+
+            <h3>项目特色</h3>
+            <ul class="feature-list">
+                <li><strong>🚀 实时交易监控：</strong>24/7监控Solana链上交易，确保游戏数据实时准确</li>
+                <li><strong>💎 多钱包支持：</strong>支持Phantom、OKX、Coinbase等主流Solana钱包</li>
+                <li><strong>🏆 公平奖励机制：</strong>基于实际交易数据的透明奖励分配</li>
+                <li><strong>👥 社区驱动：</strong>用户参与度直接影响游戏发展和奖励分配</li>
+                <li><strong>⚡ 技术先进：</strong>采用最新区块链技术，确保安全性和可扩展性</li>
+                <li><strong>🎮 游戏化体验：</strong>通过游戏化的方式让用户享受交易乐趣</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🎮 游戏机制</h2>
+            
+            <div class="game-mechanics">
+                <h3>核心玩法</h3>
+                <p>
+                    游戏围绕<span class="highlight">MEME代币</span>的交易活动展开，玩家通过持有代币、
+                    参与交易、完成特定任务来获得积分和奖励。让我们一起<span class="highlight">HODL TO THE MOON! 🚀</span>
+                </p>
+            </div>
+
+            <h3>游戏模式</h3>
+            <ul class="feature-list">
+                <li><strong>🏆 持仓竞赛：</strong>持有代币数量排名，前20名获得奖励</li>
+                <li><strong>💎 交易竞赛：</strong>单笔最大交易获得特殊奖励</li>
+                <li><strong>⭐ 积分系统：</strong>通过多种方式获得积分，兑换代币</li>
+                <li><strong>🔄 轮次机制：</strong>定期重置，确保公平竞争</li>
+                <li><strong>🎯 实时监控：</strong>24/7监控Solana链上交易数据</li>
+                <li><strong>🏅 排行榜：</strong>实时更新持仓和交易排行榜</li>
+            </ul>
+
+            <h3>参与方式</h3>
+            <ul class="feature-list">
+                <li>连接Solana钱包（Phantom、OKX、Coinbase等）</li>
+                <li>购买并持有MEME代币</li>
+                <li>参与交易活动</li>
+                <li>查看实时排名和奖励状态</li>
+                <li>领取获得的奖励</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🏆 奖励系统</h2>
+            
+            <div class="reward-system">
+                <h3>奖励类型</h3>
+                <p>
+                    系统提供多种奖励机制，确保不同参与方式的用户都能获得相应回报。
+                </p>
+            </div>
+
+            <h3>奖励详情</h3>
+            <ul class="feature-list">
+                <li><strong>🏆 持仓前20奖励：</strong>每轮3000积分，按持仓量排名分配</li>
+                <li><strong>💎 最大交易奖励：</strong>每轮2000积分，奖励单笔最大交易者</li>
+                <li><strong>⭐ 积分兑换：</strong>积分可兑换MEME代币，1积分=1代币</li>
+                <li><strong>🎁 特殊奖励：</strong>社区贡献者、活跃用户额外奖励</li>
+                <li><strong>🚀 额外奖励：</strong>连续参与多轮的用户获得额外奖励</li>
+            </ul>
+
+            <h3>积分获取方式</h3>
+            <ul class="feature-list">
+                <li>🏆 持仓排名奖励</li>
+                <li>💎 交易竞赛奖励</li>
+                <li>👥 社区活动参与</li>
+                <li>🤝 邀请新用户</li>
+                <li>📅 每日签到</li>
+                <li>🎯 完成特殊任务</li>
+            </ul>
+
+            <div class="success">
+                <strong>💡 提示：</strong>奖励系统完全基于链上数据，确保公平透明。
+                所有奖励记录都可在Solana区块链上验证。
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>⚙️ 技术架构</h2>
+            
+            <h3>技术栈</h3>
+            <div class="tech-stack">
+                <div class="tech-item">
+                    <h4>🚀 区块链</h4>
+                    <p>Solana</p>
+                    <p>高性能、低费用</p>
+                </div>
+                <div class="tech-item">
+                    <h4>💻 前端技术</h4>
+                    <p>HTML5 + CSS3 + JavaScript</p>
+                    <p>响应式设计</p>
+                </div>
+                <div class="tech-item">
+                    <h4>🔥 后端服务</h4>
+                    <p>Firebase</p>
+                    <p>实时数据库</p>
+                </div>
+                <div class="tech-item">
+                    <h4>👛 钱包集成</h4>
+                    <p>Phantom/OKX/Coinbase</p>
+                    <p>多钱包支持</p>
+                </div>
+            </div>
+
+            <h3>系统架构</h3>
+            <ul class="feature-list">
+                <li><strong>前端层：</strong>用户界面、钱包连接、数据展示</li>
+                <li><strong>业务层：</strong>游戏逻辑、奖励计算、用户管理</li>
+                <li><strong>数据层：</strong>Firebase实时数据库、链上数据</li>
+                <li><strong>区块链层：</strong>Solana网络、智能合约、交易验证</li>
+            </ul>
+
+            <h3>数据流程</h3>
+            <ol style="padding-left: 20px;">
+                <li>监控Solana链上MEME代币交易</li>
+                <li>实时更新持仓数据和交易记录</li>
+                <li>计算排名和奖励资格</li>
+                <li>更新用户界面显示</li>
+                <li>处理用户奖励领取请求</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>🔒 安全机制</h2>
+            
+            <h3>安全保障</h3>
+            <ul class="feature-list">
+                <li><strong>链上验证：</strong>所有数据基于Solana区块链，不可篡改</li>
+                <li><strong>钱包安全：</strong>用户私钥本地存储，平台不接触</li>
+                <li><strong>数据透明：</strong>所有交易和奖励记录公开可查</li>
+                <li><strong>防作弊机制：</strong>多重验证确保游戏公平性</li>
+                <li><strong>定期审计：</strong>代码和智能合约定期安全审计</li>
+            </ul>
+
+            <div class="warning">
+                <strong>⚠️ 安全提醒：</strong>
+                请确保使用官方渠道下载钱包，不要泄露私钥或助记词。
+                平台不会要求您提供私钥信息。
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🗺️ 发展路线图</h2>
+            
+            <div class="roadmap">
+                <div class="roadmap-item">
+                    <h4>第一阶段</h4>
+                    <p><strong>基础功能</strong></p>
+                    <ul style="text-align: left; margin-top: 10px;">
+                        <li>核心游戏机制</li>
+                        <li>多钱包支持</li>
+                        <li>基础奖励系统</li>
+                    </ul>
+                </div>
+                <div class="roadmap-item">
+                    <h4>第二阶段</h4>
+                    <p><strong>功能扩展</strong></p>
+                    <ul style="text-align: left; margin-top: 10px;">
+                        <li>更多游戏模式</li>
+                        <li>社交功能</li>
+                        <li>移动端适配</li>
+                    </ul>
+                </div>
+                <div class="roadmap-item">
+                    <h4>第三阶段</h4>
+                    <p><strong>生态建设</strong></p>
+                    <ul style="text-align: left; margin-top: 10px;">
+                        <li>DAO治理</li>
+                        <li>跨链支持</li>
+                        <li>NFT集成</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>⚠️ 风险提示</h2>
+            
+            <div class="warning">
+                <h3>投资风险</h3>
+                <ul style="margin-top: 10px;">
+                    <li>加密货币价格波动剧烈，投资需谨慎</li>
+                    <li>游戏奖励不构成投资建议</li>
+                    <li>参与前请充分了解相关风险</li>
+                </ul>
+            </div>
+
+            <h3>技术风险</h3>
+            <ul class="feature-list">
+                <li>区块链网络可能出现的延迟或故障</li>
+                <li>智能合约可能存在技术漏洞</li>
+                <li>钱包安全问题</li>
+                <li>监管政策变化风险</li>
+            </ul>
+
+            <h3>免责声明</h3>
+            <p>
+                本白皮书仅供参考，不构成投资建议。用户应自行承担投资风险，
+                平台不对因参与游戏造成的任何损失承担责任。
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>📞 联系我们</h2>
+            <p>
+                如果您对本项目有任何疑问或建议，欢迎通过以下方式联系我们：
+            </p>
+            <ul class="feature-list">
+                <li><strong>官方网站：</strong>当前游戏平台</li>
+                <li><strong>技术支持：</strong>通过平台反馈功能</li>
+                <li><strong>社区讨论：</strong>游戏内社区功能</li>
+            </ul>
+        </div>
+
+        <div class="section" style="text-align: center; background: linear-gradient(135deg, #FFDD00, #FF2E63); color: black; border: 4px solid #000; transform: rotate(-2deg);">
+            <h2 style="color: black; border-bottom-color: black; text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.3);">🎉 感谢您的参与</h2>
+            <p style="color: black; text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);">
+                感谢您对<span class="highlight">MEME TO THE MOON</span>的支持和信任。让我们一起构建一个更好的区块链游戏生态系统！🚀💎
+            </p>
+            <p style="margin-top: 20px; font-size: 0.9rem; opacity: 0.8; color: black; text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);">
+                © 2024 MEME TO THE MOON. 保留所有权利. TO THE MOON! 🌙
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function closeWhitepaper() {
+            // 触发自定义事件，通知父窗口关闭白皮书
+            window.parent.postMessage({
+                type: 'closeWhitepaper',
+                data: {}
+            }, '*');
+            
+            // 如果是在iframe中，关闭iframe
+            if (window.parent !== window) {
+                window.parent.document.querySelector('iframe[src*="whitepaper.html"]')?.remove();
+            }
+        }
+
+        // 监听ESC键关闭
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeWhitepaper();
+            }
+        });
+
+        // 点击背景关闭（如果不在iframe中）
+        document.addEventListener('click', function(event) {
+            if (event.target === document.body && window.parent === window) {
+                closeWhitepaper();
+            }
+        });
+    </script>
+</body>
+</html> 
