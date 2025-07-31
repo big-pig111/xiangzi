@@ -1,23 +1,22 @@
-// 钱包连接管理器
+// 钱包连接管理器 - 适配真实 Solana 钱包
 class WalletManager {
     constructor() {
         this.isConnected = false;
         this.currentWallet = null;
         this.publicKey = null;
         this.walletType = null;
+        this.connection = null;
     }
 
     init() {
         this.bindEvents();
         this.checkWalletConnection();
-        
-        // 监听钱包连接状态变化
         this.setupWalletListeners();
         
         // 定期检查连接状态
         setInterval(() => {
             this.checkWalletConnection();
-        }, 5000); // 每5秒检查一次
+        }, 5000);
         
         this.addLog('钱包管理器已初始化', 'info');
     }
@@ -316,6 +315,7 @@ class WalletManager {
             this.currentWallet = null;
             this.publicKey = null;
             this.walletType = null;
+            this.connection = null;
             
             this.updateWalletStatus();
             this.addLog('🔌 钱包已断开连接', 'info');
@@ -333,6 +333,7 @@ class WalletManager {
             this.currentWallet = null;
             this.publicKey = null;
             this.walletType = null;
+            this.connection = null;
             this.updateWalletStatus();
         }
     }
@@ -393,6 +394,7 @@ class WalletManager {
                 this.currentWallet = null;
                 this.publicKey = null;
                 this.walletType = null;
+                this.connection = null;
             }
 
             this.updateWalletStatus();
@@ -402,6 +404,7 @@ class WalletManager {
             this.currentWallet = null;
             this.publicKey = null;
             this.walletType = null;
+            this.connection = null;
             this.updateWalletStatus();
         }
     }
@@ -596,6 +599,54 @@ class WalletManager {
                 throw new Error('用户拒绝了交易请求');
             }
             throw new Error(`交易发送失败: ${error.message}`);
+        }
+    }
+
+    // 获取钱包余额
+    async getBalance() {
+        if (!this.isConnected || !this.currentWallet) {
+            throw new Error('钱包未连接');
+        }
+
+        try {
+            const connection = this.currentWallet.connection;
+            if (!connection) {
+                throw new Error('无法获取连接信息');
+            }
+
+            const balance = await connection.getBalance(this.currentWallet.publicKey);
+            return balance / 1e9; // 转换为 SOL
+        } catch (error) {
+            throw new Error(`获取余额失败: ${error.message}`);
+        }
+    }
+
+    // 获取代币余额
+    async getTokenBalance(tokenMint) {
+        if (!this.isConnected || !this.currentWallet) {
+            throw new Error('钱包未连接');
+        }
+
+        try {
+            const connection = this.currentWallet.connection;
+            if (!connection) {
+                throw new Error('无法获取连接信息');
+            }
+
+            // 获取代币账户
+            const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+                this.currentWallet.publicKey,
+                { mint: tokenMint }
+            );
+
+            if (tokenAccounts.value.length === 0) {
+                return 0;
+            }
+
+            // 返回第一个账户的余额
+            return tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+        } catch (error) {
+            throw new Error(`获取代币余额失败: ${error.message}`);
         }
     }
 }
