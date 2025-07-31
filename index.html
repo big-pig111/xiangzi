@@ -1,2864 +1,522 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meme Coin Countdown</title>
-    <!-- 
-        生产环境警告：请替换为本地Tailwind CSS构建版本
-        安装方法：npm install tailwindcss && npx tailwindcss build
-        或使用CDN的压缩版本用于快速原型开发
-    -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+require('dotenv').config();
+const bs58 = require('bs58');
+const { Keypair, Connection, PublicKey } = require("@solana/web3.js");
+const { getOrCreateAssociatedTokenAccount, transfer } = require("@solana/spl-token");
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+
+admin.initializeApp();
+
+const secret = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
+const payer = Keypair.fromSecretKey(secret);
+const mintAddress = "29ha2CL9u2yA23watQzAUGGnutKDh2GguPK8UzKJbonk";
+const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+
+// 游戏奖励配置
+const GAME_CONFIG = {
+  TOP20_REWARD_AMOUNT: 30000, // 持仓前20持有者每人奖励30000 TOKENS
+  LAST_COUNTDOWN_REWARD_AMOUNT: 100000, // 最后倒计时奖励100000 TOKENS
+  TOKEN_DECIMALS: 7, // 代币小数位数
+  TOP20_HOLDER_COUNT: 20 // 前20名持有者
+};
+
+// 验证用户是否有资格领取持仓前20持有者奖励
+async function validateTop20HolderClaim(wallet, roundId) {
+  try {
+    // 从Firebase获取指定轮次的持仓数据
+    const roundRef = admin.database().ref(`holderRewardRounds/${roundId}`);
+    const roundSnap = await roundRef.once("value");
+    const roundData = roundSnap.val();
     
-    <!-- 配置Tailwind自定义颜色和字体 -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        memeYellow: '#FFDD00',
-                        memePink: '#FF2E63',
-                        memeBlue: '#08D9D6',
-                        memePurple: '#9D4EDD',
-                        memeGreen: '#4CAF50',
-                    },
-                    fontFamily: {
-                        meme: ['"Comic Sans MS"', '"Comic Neue"', 'cursive'],
-                    },
-                    animation: {
-                        'float': 'float 3s ease-in-out infinite',
-                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'spin-slow': 'spin 8s linear infinite',
-                    },
-                    keyframes: {
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-10px)' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    if (!roundData || !roundData.top20Holders) {
+      throw new Error("轮次数据不存在或无效");
+    }
     
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .text-shadow {
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-            }
-            .text-shadow-meme {
-                text-shadow: 3px 3px 0px #000;
-            }
-            .border-meme {
-                border: 4px solid #000;
-                border-radius: 12px;
-            }
-            .rotate-random {
-                transform: rotate(-2deg);
-            }
-            .rotate-random-reverse {
-                transform: rotate(2deg);
-            }
-            .glow {
-                box-shadow: 0 0 15px rgba(255, 221, 0, 0.7);
-            }
-        }
-    </style>
-</head>
-<body class="bg-gray-900 font-meme min-h-screen overflow-x-hidden relative">
-    <!-- 背景装饰元素 -->
-    <div class="absolute top-10 left-10 w-20 h-20 bg-memePink rounded-full opacity-50 animate-spin-slow"></div>
-    <div class="absolute bottom-20 right-10 w-32 h-32 bg-memeBlue rounded-full opacity-40 animate-spin-slow"></div>
-    <div class="absolute top-1/3 right-1/4 w-16 h-16 bg-memeYellow rounded-full opacity-60 animate-spin-slow"></div>
+    // 检查用户是否在持仓前20中
+    const isTop20 = roundData.top20Holders.some(holder => holder.address === wallet);
+    if (!isTop20) {
+      throw new Error("该地址不在持仓前20持有者中");
+    }
     
-    <!-- 漂浮的MEME文字 -->
-    <div class="absolute top-20 right-20 text-5xl font-bold text-memePurple opacity-20 rotate-12 animate-float">MEME</div>
-    <div class="absolute bottom-40 left-20 text-6xl font-bold text-memeGreen opacity-20 -rotate-6 animate-float" style="animation-delay: 1s">TO THE MOON</div>
-    <div class="absolute top-1/2 left-10 text-4xl font-bold text-memePink opacity-20 rotate-6 animate-float" style="animation-delay: 0.5s">HODL</div>
+    // 检查是否已经领取过
+    const claimedRef = admin.database().ref(`claimedRewards/top20/${roundId}/${wallet}`);
+    const claimedSnap = await claimedRef.once("value");
+    if (claimedSnap.exists()) {
+      throw new Error("该轮次奖励已领取");
+    }
     
-    <!-- 主容器 -->
-    <div class="container mx-auto px-4 py-12 relative z-10">
-        <!-- 顶部标题 -->
-        <header class="text-center mb-8">
-            <h1 class="text-[clamp(2.5rem,8vw,5rem)] font-bold text-memeYellow text-shadow-meme mb-4 transform hover:scale-105 transition-transform duration-300">
-                MOON LAUNCH
-            </h1>
-            <p class="text-[clamp(1.2rem,4vw,2rem)] text-white animate-pulse-fast">
-                🚀 Countdown to the next big meme coin! 🚀
-            </p>
-        </header>
-        
-        <!-- 倒计时主体 - 中间偏上位置 -->
-        <div class="max-w-4xl mx-auto my-12 border-meme bg-gradient-to-br from-gray-800 to-gray-900 p-8 md:p-12 relative">
-            <!-- 装饰元素 -->
-            <div class="absolute -top-6 -left-6 bg-memePink p-3 rotate-random border-meme">
-                <i class="fa fa-diamond text-white text-2xl"></i>
-            </div>
-            <div class="absolute -bottom-6 -right-6 bg-memeBlue p-3 rotate-random-reverse border-meme">
-                <i class="fa fa-rocket text-white text-2xl"></i>
-            </div>
-            
-            <h2 class="text-center text-[clamp(1.5rem,5vw,2.5rem)] text-memePink mb-8">
-                Time Until Launch
-            </h2>
-            
-            <div id="countdown" class="grid grid-cols-2 gap-4 md:gap-8">
-                <!-- 分 -->
-                <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                    <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">00</div>
-                    <div class="text-white font-bold">MINUTES</div>
-                </div>
-                
-                <!-- 秒 -->
-                <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                    <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
-                    <div class="text-black font-bold">SECONDS</div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 代币交易检测区域 -->
-        <div class="max-w-4xl mx-auto my-12 border-meme bg-gradient-to-br from-gray-800 to-gray-900 p-8 md:p-12 relative">
-            <!-- 装饰元素 -->
-            <div class="absolute -top-6 -left-6 bg-memeGreen p-3 rotate-random border-meme">
-                <i class="fa fa-bitcoin text-white text-2xl"></i>
-            </div>
-            <div class="absolute -bottom-6 -right-6 bg-memeYellow p-3 rotate-random-reverse border-meme">
-                <i class="fa fa-exchange text-black text-2xl"></i>
-            </div>
-            
-            <h2 class="text-center text-[clamp(1.5rem,5vw,2.5rem)] text-memeGreen mb-8">
-                🚀 Solana实时交易检测器 🚀
-            </h2>
-            
-            <!-- 代币地址显示 -->
-            <div class="mb-8">
-                <div class="bg-gray-700 border-meme p-6">
-                    <label class="block text-memeYellow font-bold mb-3">当前检测代币</label>
-                    <div class="flex gap-4 flex-wrap items-center">
-                        <input 
-                            type="text" 
-                            id="tokenAddress" 
-                            placeholder="等待管理面板设置代币地址..."
-                            class="flex-1 min-w-64 p-3 bg-gray-600 border-2 border-gray-500 rounded-lg text-white placeholder-gray-400 focus:border-memeYellow focus:outline-none"
-                            readonly
-                        >
+    return {
+      valid: true,
+      roundData: roundData,
+      holderData: roundData.top20Holders.find(holder => holder.address === wallet)
+    };
+  } catch (error) {
+    throw new Error(`持仓前20验证失败: ${error.message}`);
+  }
+}
 
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 交易检测状态 -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <!-- 检测状态 -->
-                <div class="bg-memeBlue border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow">
-                    <div class="text-3xl mb-2">📡</div>
-                    <div class="text-xl font-bold text-black mb-2">检测状态</div>
-                    <div id="detectionStatus" class="text-lg font-bold text-black">🔴 等待管理面板开启</div>
-                </div>
-                
-                <!-- 交易次数 -->
-                <div class="bg-memePurple border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow">
-                    <div class="text-3xl mb-2">📊</div>
-                    <div class="text-xl font-bold text-white mb-2">交易次数</div>
-                    <div id="transactionCount" class="text-2xl font-bold text-white">0</div>
-                </div>
-                
-                <!-- 倒计时调整 -->
-                <div class="bg-memePink border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow">
-                    <div class="text-3xl mb-2">⏰</div>
-                    <div class="text-xl font-bold text-black mb-2">倒计时调整</div>
-                    <div id="timeAdjustment" class="text-lg font-bold text-black">+0 秒</div>
-                </div>
-                
-                <!-- RPC状态 -->
-                <div class="bg-memeYellow border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow">
-                    <div class="text-3xl mb-2">🌐</div>
-                    <div class="text-xl font-bold text-black mb-2">RPC状态</div>
-                    <div id="rpcStatus" class="text-lg font-bold text-black">未选择</div>
-                </div>
-            </div>
-            
-
-            
-            <!-- 交易日志 -->
-            <div class="bg-gray-700 border-meme p-4 max-h-60 overflow-y-auto">
-                <h3 class="text-memeYellow font-bold mb-3">📝 交易日志</h3>
-                <div id="transactionLog" class="text-sm text-gray-300 space-y-2">
-                    <div class="text-gray-500 italic">等待交易检测...</div>
-                </div>
-            </div>
-            
-            <!-- 详细交易记录表格 -->
-            <div class="bg-gray-700 border-meme p-4 mt-4 max-h-80 overflow-y-auto">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-memeYellow font-bold">📊 详细交易记录</h3>
-                    <div class="flex items-center gap-2">
-                        <span id="detailedCount" class="text-xs text-memeYellow font-bold">0 条记录</span>
-                        <div id="syncIndicator" class="w-2 h-2 bg-gray-500 rounded-full"></div>
-                        <span id="syncStatus" class="text-xs text-gray-400">等待同步...</span>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs">
-                        <thead>
-                            <tr class="text-memeBlue border-b border-gray-600">
-                                <th class="text-left p-2">时间</th>
-                                <th class="text-left p-2">类型</th>
-                                <th class="text-left p-2">数量</th>
-                                <th class="text-left p-2">交易者</th>
-                                <th class="text-left p-2">交易哈希</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detailedTransactionTable">
-                            <tr>
-                                <td colspan="6" class="text-center text-gray-500 italic p-4">暂无交易记录</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 左侧成功增加倒计时地址区域 -->
-        <div id="successAddressesPanel" class="fixed top-32 left-4 w-80 bg-gray-800 border-meme p-4 rounded-xl shadow-lg z-50 max-h-[70vh] overflow-y-auto">
-            <h3 class="text-memeYellow font-bold text-lg mb-3">💰 成功增加倒计时地址</h3>
-            <ul id="successAddressesList" class="space-y-2">
-                <li class="text-gray-400 text-sm italic">等待大额买入...</li>
-                <li class="text-gray-400 text-sm italic">等待大额买入...</li>
-                <li class="text-gray-400 text-sm italic">等待大额买入...</li>
-                <li class="text-gray-400 text-sm italic">等待大额买入...</li>
-                <li class="text-gray-400 text-sm italic">等待大额买入...</li>
-            </ul>
-        </div>
-        
-        <!-- 右上角新增区域 -->
-        <div id="topRightPanel" class="fixed top-4 right-4 w-80 bg-gray-800 border-meme p-4 rounded-xl shadow-lg z-50 max-h-[40vh] overflow-y-auto">
-            <h3 class="text-memeYellow font-bold text-lg mb-3">🔗 钱包连接</h3>
-            
-            <!-- 钱包连接按钮 -->
-            <button id="walletConnectBtn" class="w-full bg-memeBlue hover:bg-blue-600 text-white font-bold py-2 px-4 rounded border-meme transition-all duration-300 mb-3">
-                <span class="text-white">🔗 连接钱包</span>
-            </button>
-            
-            <!-- 钱包状态显示 -->
-            <div id="walletStatus" class="text-gray-400 text-sm mb-3">
-                <span class="font-bold">未连接</span>
-            </div>
-            
-            <!-- 持仓奖励倒计时显示 -->
-            <div class="bg-gray-700 border-meme p-3 rounded-lg mb-3">
-                <div class="text-center">
-                    <div class="text-memeYellow font-bold text-sm mb-1">🏆 持仓奖励倒计时</div>
-                    <div id="holderRewardCountdown" class="text-xl font-bold text-memePink">20:00</div>
-                    <div class="text-gray-300 text-xs">每3分钟快照一次（测试）</div>
-                </div>
-            </div>
-            
-            <!-- 功能按钮区域 -->
-            <div class="space-y-3">
-                <!-- 白皮书按钮 -->
-                <button id="whitepaperBtn" class="w-full bg-memeGreen hover:bg-green-600 text-white font-bold py-2 px-4 rounded border-meme transition-all duration-300">
-                    <span class="text-white">📄 白皮书</span>
-                </button>
-                
-                <!-- 领取奖励按钮 -->
-                <button id="claimRewardBtn" class="w-full bg-memePink hover:bg-pink-600 text-white font-bold py-2 px-4 rounded border-meme transition-all duration-300">
-                    <span class="text-white">🎁 领取奖励</span>
-                </button>
-            </div>
-        </div>
-        
-        <!-- 领取奖励页面 -->
-        <div id="rewardPage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] hidden">
-            <div class="bg-gray-800 border-meme p-6 rounded-xl shadow-lg w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-memeYellow font-bold text-2xl">🎁 领取奖励</h3>
-                    <button onclick="hideRewardPage()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
-                </div>
-                
-                <!-- 奖励信息展示区域 -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <!-- 持仓前20持有者奖励 -->
-                    <div class="bg-gray-700 border-meme p-4 rounded-lg">
-                        <div class="flex items-center mb-3">
-                            <span class="text-2xl mr-2">🏆</span>
-                            <h4 class="text-memeYellow font-bold text-lg">持仓前20持有者奖励</h4>
-                        </div>
-                        <div class="text-gray-300 text-sm mb-3">
-                            <p>持有代币数量排名前20的地址，每人可获得特殊奖励（每3分钟快照一次，可随时领取）</p>
-                        </div>
-                        <div class="bg-gray-600 p-3 rounded mb-3">
-                            <div class="text-memePink font-bold mb-2">当前状态：</div>
-                            <div id="top20Status" class="text-gray-300 text-sm">
-                                <span class="text-yellow-400">⏳ 等待持仓数据...</span>
-                            </div>
-                        </div>
-                        <button id="claimTop20Btn" class="w-full bg-memeGreen hover:bg-green-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span class="text-white">🏆 领取前20名奖励</span>
-                        </button>
-                    </div>
-                    
-                    <!-- 最后成功增加倒计时地址奖励 -->
-                    <div class="bg-gray-700 border-meme p-4 rounded-lg">
-                        <div class="flex items-center mb-3">
-                            <span class="text-2xl mr-2">💰</span>
-                            <h4 class="text-memeYellow font-bold text-lg">最后倒计时奖励</h4>
-                        </div>
-                        <div class="text-gray-300 text-sm mb-3">
-                            <p>最后一个成功增加倒计时时间的地址可获得额外奖励（可随时领取）</p>
-                        </div>
-                        <div class="bg-gray-600 p-3 rounded mb-3">
-                            <div class="text-memePink font-bold mb-2">当前状态：</div>
-                            <div id="lastSuccessStatus" class="text-gray-300 text-sm">
-                                <span class="text-yellow-400">⏳ 等待大额买入数据...</span>
-                            </div>
-                        </div>
-                        <button id="claimLastSuccessBtn" class="w-full bg-memePink hover:bg-pink-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span class="text-white">💰 领取最后倒计时奖励</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- 地址验证区域 -->
-                <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
-                    <div class="flex items-center mb-3">
-                        <span class="text-2xl mr-2">🔍</span>
-                        <h4 class="text-memeYellow font-bold text-lg">地址验证</h4>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-gray-300 text-sm mb-2">输入钱包地址</label>
-                            <input type="text" id="verifyAddressInput" placeholder="输入要验证的钱包地址" class="w-full p-3 bg-gray-600 border-2 border-gray-500 rounded-lg text-white placeholder-gray-400 focus:border-memeYellow focus:outline-none">
-                        </div>
-                        <div class="flex items-end">
-                            <button id="verifyAddressBtn" class="w-full bg-memeBlue hover:bg-blue-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300">
-                                <span class="text-white">🔍 验证地址</span>
-                            </button>
-                        </div>
-                        <div class="flex items-end">
-                            <div id="verifyResult" class="w-full p-3 bg-gray-600 rounded-lg text-sm">
-                                <span class="text-gray-400">等待验证...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 奖励详情展示 -->
-                <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
-                    <div class="flex items-center mb-3">
-                        <span class="text-2xl mr-2">📊</span>
-                        <h4 class="text-memeYellow font-bold text-lg">奖励详情</h4>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <h5 class="text-memePink font-bold mb-2">持仓前20持有者</h5>
-                            <div id="top20Details" class="text-gray-300 text-sm space-y-1">
-                                <div>• 总持有者数量：<span id="totalHolders">-</span></div>
-                                <div>• 前20名数量：<span id="top20Count">20</span></div>
-                                <div>• 每人奖励代币数量：<span id="top20Reward">-</span></div>
-                            </div>
-                        </div>
-                        <div>
-                            <h5 class="text-memePink font-bold mb-2">最后倒计时地址</h5>
-                            <div id="lastSuccessDetails" class="text-gray-300 text-sm space-y-1">
-                                <div>• 地址：<span id="lastSuccessAddress">-</span></div>
-                                <div>• 买入数量：<span id="lastSuccessAmount">-</span></div>
-                                <div>• 奖励代币数量：<span id="lastSuccessReward">-</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 历史获奖轮次列表 -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- 持仓奖励历史轮次 -->
-                    <div class="bg-gray-700 border-meme p-4 rounded-lg">
-                        <div class="flex items-center mb-3">
-                            <span class="text-2xl mr-2">🏆</span>
-                            <h4 class="text-memeYellow font-bold text-lg">持仓奖励历史</h4>
-                        </div>
-                        <div class="bg-gray-600 p-4 rounded max-h-60 overflow-y-auto">
-                            <div id="holderRewardRoundsList" class="text-sm text-gray-300">
-                                <div class="text-center text-gray-400">加载持仓奖励历史...</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- 倒计时奖励历史轮次 -->
-                    <div class="bg-gray-700 border-meme p-4 rounded-lg">
-                        <div class="flex items-center mb-3">
-                            <span class="text-2xl mr-2">⚡</span>
-                            <h4 class="text-memeYellow font-bold text-lg">倒计时奖励历史</h4>
-                        </div>
-                        <div class="bg-gray-600 p-4 rounded max-h-60 overflow-y-auto">
-                            <div id="countdownRewardRoundsList" class="text-sm text-gray-300">
-                                <div class="text-center text-gray-400">加载倒计时奖励历史...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 钱包选择模态框 -->
-        <div id="walletModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] hidden">
-            <div class="bg-gray-800 border-meme p-6 rounded-xl shadow-lg w-96 max-w-[90vw]">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-memeYellow font-bold text-xl">选择钱包</h3>
-                    <button onclick="window.walletManager.hideWalletModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
-                </div>
-                
-                <div class="space-y-3">
-                    <!-- OKX钱包 -->
-                    <button onclick="window.walletManager.connectWallet('okx')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 flex items-center justify-between">
-                        <div class="flex items-center">
-                            <span class="text-2xl mr-3">🔵</span>
-                            <div class="text-left">
-                                <div class="font-bold">OKX Wallet</div>
-                                <div class="text-sm opacity-75">OKX交易所钱包</div>
-                            </div>
-                        </div>
-                        <span class="text-lg">→</span>
-                    </button>
-                    
-                    <!-- Phantom钱包 -->
-                    <button onclick="window.walletManager.connectWallet('phantom')" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 flex items-center justify-between">
-                        <div class="flex items-center">
-                            <span class="text-2xl mr-3">👻</span>
-                            <div class="text-left">
-                                <div class="font-bold">Phantom Wallet</div>
-                                <div class="text-sm opacity-75">幽灵钱包</div>
-                            </div>
-                        </div>
-                        <span class="text-lg">→</span>
-                    </button>
-                    
-                    <!-- Coinbase钱包 -->
-                    <button onclick="window.walletManager.connectWallet('coinbase')" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 flex items-center justify-between">
-                        <div class="flex items-center">
-                            <span class="text-2xl mr-3">🟡</span>
-                            <div class="text-left">
-                                <div class="font-bold">Coinbase Wallet</div>
-                                <div class="text-sm opacity-75">Coinbase钱包</div>
-                            </div>
-                        </div>
-                        <span class="text-lg">→</span>
-                    </button>
-                </div>
-                
-                <div class="mt-4 text-center">
-                    <p class="text-gray-400 text-sm">
-                        请确保已安装相应的钱包扩展
-                    </p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 右侧持仓前20持有者区域 -->
-        <div id="topHoldersPanel" class="fixed bottom-4 right-4 w-80 bg-gray-800 border-meme p-3 rounded-xl shadow-lg z-50 max-h-[45vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="text-memeYellow font-bold text-base">🏆 持仓前20持有者</h3>
-                <div class="flex items-center gap-1">
-                    <div id="holdersRefreshCountdown" class="text-memePink font-bold text-xs">10</div>
-                    <span class="text-gray-400 text-xs">秒后刷新</span>
-                </div>
-            </div>
-            <ul id="topHoldersList" class="space-y-1 text-xs">
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-                <li class="text-gray-400 italic">链上实时查询中...</li>
-            </ul>
-        </div>
-        
-        <!-- 信息区域 -->
-        <div class="max-w-3xl mx-auto text-center mt-12">
-            <div class="bg-gray-800 border-meme p-6 rotate-random">
-                <h3 class="text-2xl md:text-3xl text-memeYellow mb-4">Why This Meme Coin?</h3>
-                <p class="text-white text-lg mb-4">Because why not? It's a meme coin, just like all the others, but <span class="text-memePink font-bold">this one is going to the moon!</span></p>
-                <button class="bg-memePink hover:bg-pink-600 text-white font-bold py-3 px-8 border-meme transform hover:rotate-1 transition-all duration-300 mt-2">
-                    BUY NOW BEFORE IT'S TOO LATE!
-                </button>
-            </div>
-            
-            <!-- 社交媒体分享 -->
-            <div class="mt-10">
-                <p class="text-white text-xl mb-4">SHARE THE HYPE!</p>
-                <div class="flex justify-center gap-4">
-                    <a href="#" class="bg-blue-500 hover:bg-blue-600 text-white w-12 h-12 rounded-full flex items-center justify-center border-meme transform hover:scale-110 transition-all">
-                        <i class="fa fa-twitter text-2xl"></i>
-                    </a>
-                    <a href="#" class="bg-blue-700 hover:bg-blue-800 text-white w-12 h-12 rounded-full flex items-center justify-center border-meme transform hover:scale-110 transition-all">
-                        <i class="fa fa-facebook text-2xl"></i>
-                    </a>
-                    <a href="#" class="bg-pink-600 hover:bg-pink-700 text-white w-12 h-12 rounded-full flex items-center justify-center border-meme transform hover:scale-110 transition-all">
-                        <i class="fa fa-instagram text-2xl"></i>
-                    </a>
-                    <a href="#" class="bg-gray-800 hover:bg-gray-700 text-white w-12 h-12 rounded-full flex items-center justify-center border-meme transform hover:scale-110 transition-all">
-                        <i class="fa fa-telegram text-2xl"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 页脚 -->
-        <footer class="mt-20 text-center text-gray-500 text-sm">
-            <p>Disclaimer: This is a meme website. Not financial advice. Don't actually invest your life savings.</p>
-            <p class="mt-2">🚀 To the moon and beyond! 🚀</p>
-        </footer>
-    </div>
-
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+// 验证用户是否有资格领取最后倒计时奖励
+async function validateLastCountdownClaim(wallet, roundId) {
+  try {
+    // 从Firebase获取指定轮次的倒计时数据
+    const roundRef = admin.database().ref(`gameRounds/${roundId}`);
+    const roundSnap = await roundRef.once("value");
+    const roundData = roundSnap.val();
     
-    <!-- 钱包连接管理器 -->
-    <script src="wallet-connect.js"></script>
-    <script>
-        // Firebase配置
-        const firebaseConfig = {
-            apiKey: "AIzaSyA5Z5ieEbAcfQX0kxGSn9ldGXhzvAwx_8M",
-            authDomain: "chat-294cc.firebaseapp.com",
-            databaseURL: "https://chat-294cc-default-rtdb.firebaseio.com",
-            projectId: "chat-294cc",
-            storageBucket: "chat-294cc.firebasestorage.app",
-            messagingSenderId: "913615304269",
-            appId: "1:913615304269:web:0274ffaccb8e6b678e4e04",
-            measurementId: "G-SJR9NDW86B"
-        };
+    if (!roundData || !roundData.lastBigBuyAddress) {
+      throw new Error("轮次数据不存在或无效");
+    }
+    
+    // 检查用户是否是最后大额买入地址
+    if (roundData.lastBigBuyAddress !== wallet) {
+      throw new Error("该地址不是最后倒计时地址");
+    }
+    
+    // 检查是否已经领取过
+    const claimedRef = admin.database().ref(`claimedRewards/countdown/${roundId}/${wallet}`);
+    const claimedSnap = await claimedRef.once("value");
+    if (claimedSnap.exists()) {
+      throw new Error("该轮次奖励已领取");
+    }
+    
+    return {
+      valid: true,
+      roundData: roundData,
+      lastBuyData: {
+        address: roundData.lastBigBuyAddress,
+        amount: roundData.lastBigBuyAmount
+      }
+    };
+  } catch (error) {
+    throw new Error(`最后倒计时验证失败: ${error.message}`);
+  }
+}
 
-        // 初始化Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        const functions = firebase.app().functions('us-central1'); // 指定region
-        
-        // Solana实时交易检测器类
-        class SolanaTransactionTracker {
-            constructor() {
-                // 倒计时相关变量
-                this.countdownDate = new Date();
-                this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
-                this.originalCountdownDate = new Date(this.countdownDate);
-                this.totalTimeAdjustment = 0;
-                this.transactionCount = 0;
-                this.countdownInterval = null;
-                
-                // 轮次ID相关变量
-                this.currentRoundId = null;
-                this.currentHolderRewardRoundId = null;
-                
-                // 持仓奖励倒计时相关变量
-                this.holderRewardDate = new Date();
-                this.holderRewardDate.setMinutes(this.holderRewardDate.getMinutes() + 3); // 改为3分钟测试
-                this.holderRewardInterval = null;
-                
-                // 交易检测相关变量
-                this.isMonitoring = false;
-                this.monitoringInterval = null;
-                this.lastSignature = null;
-                this.transactions = [];
-                this.currentEndpointIndex = 0;
-                
-                // RPC配置
-                this.rpcEndpoints = [
-                    'https://small-holy-forest.solana-mainnet.quiknode.pro/b59315ea187b3de1b3542c5c25d7f2d5b5410ff4/',
-                    'https://api.mainnet-beta.solana.com',
-                    'https://solana-api.projectserum.com'
-                ];
-                
-                // 初始化
-                this.init();
-            }
-            
-            init() {
-                // 初始更新倒计时
-                this.updateCountdown();
-                this.updateHolderRewardCountdown();
-                
-                // 启动倒计时更新
-                this.startCountdownUpdate();
-                this.startHolderRewardCountdownUpdate();
-                
-                // 绑定事件
-                this.bindEvents();
-                
-                // 从Firebase加载游戏数据
-                this.loadGameDataFromFirebase();
-            }
-            
-            // 启动倒计时更新
-            startCountdownUpdate() {
-                // 清除可能存在的旧定时器
-                if (this.countdownInterval) {
-                    clearInterval(this.countdownInterval);
-                }
-                
-                // 启动新的倒计时更新
-                this.countdownInterval = setInterval(() => {
-                    this.updateCountdown();
-                }, 1000);
-            }
-            
-            // 启动持仓奖励倒计时更新
-            startHolderRewardCountdownUpdate() {
-                // 清除可能存在的旧定时器
-                if (this.holderRewardInterval) {
-                    clearInterval(this.holderRewardInterval);
-                }
-                
-                // 启动新的持仓奖励倒计时更新
-                this.holderRewardInterval = setInterval(() => {
-                    this.updateHolderRewardCountdown();
-                }, 1000);
-            }
-            
-            bindEvents() {
-                // 监控功能已移至管理面板
-            }
-            
-            // 更新倒计时
-            updateCountdown() {
-            const now = new Date();
-                const timeLeft = this.countdownDate - now;
-                
-                // 调试信息
-                console.log('倒计时调试:', {
-                    countdownDate: this.countdownDate,
-                    now: now,
-                    timeLeft: timeLeft,
-                    minutes: Math.floor(timeLeft / (1000 * 60)),
-                    seconds: Math.floor((timeLeft % (1000 * 60)) / 1000)
-                });
-                
-                // 计算剩余的分、秒，处理负数情况
-                const minutes = Math.max(0, Math.floor(timeLeft / (1000 * 60)));
-                const seconds = Math.max(0, Math.floor((timeLeft % (1000 * 60)) / 1000));
-            
-            // 显示倒计时，确保两位数格式
-            document.getElementById("minutes").innerText = minutes.toString().padStart(2, '0');
-            document.getElementById("seconds").innerText = seconds.toString().padStart(2, '0');
-            
-            // 倒计时结束时的处理
-            if (timeLeft < 0) {
-                console.log('倒计时结束检测：timeLeft =', timeLeft, 'countdownEnded =', gameData.countdownEnded);
-                
-                // 只在第一次倒计时结束时显示LAUNCHED
-                if (!gameData.countdownEnded) {
-                    console.log('显示LAUNCHED界面，调用onCountdownEnded和pauseGame');
-                    
-                document.getElementById("countdown").innerHTML = `
-                        <div class="col-span-2 text-center">
-                        <div class="text-[clamp(2rem,8vw,5rem)] font-bold text-memePink">LAUNCHED!</div>
-                        <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
-                    </div>
-                `;
-                    
-                    // 倒计时结束时自动捕捉数据
-                    gameData.countdownEnded = true;
-                    this.onCountdownEnded();
-                    
-                    // 游戏暂停逻辑
-                    this.pauseGame();
-                } else {
-                    console.log('倒计时已结束，但countdownEnded为true，跳过处理');
-                }
-            } else {
-                // 倒计时未结束时，确保显示正常的倒计时结构
-                const countdownElement = document.getElementById("countdown");
-                if (countdownElement.innerHTML.includes("LAUNCHED")) {
-                    // 如果当前显示的是LAUNCHED，恢复倒计时显示结构
-                    countdownElement.innerHTML = `
-                        <!-- 分 -->
-                        <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                            <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">00</div>
-                            <div class="text-white font-bold">MINUTES</div>
-                        </div>
-                        
-                        <!-- 秒 -->
-                        <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                            <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
-                            <div class="text-black font-bold">SECONDS</div>
-                        </div>
-                    `;
-                }
-            }
-        }
-        
-        // 更新持仓奖励倒计时
-        updateHolderRewardCountdown() {
-            const now = new Date();
-            const timeLeft = this.holderRewardDate - now;
-            
-            // 计算剩余的分、秒，处理负数情况
-            const minutes = Math.max(0, Math.floor(timeLeft / (1000 * 60)));
-            const seconds = Math.max(0, Math.floor((timeLeft % (1000 * 60)) / 1000));
-            
-            // 显示持仓奖励倒计时
-            const holderRewardElement = document.getElementById('holderRewardCountdown');
-            if (holderRewardElement) {
-                holderRewardElement.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            }
-            
-            // 持仓奖励倒计时结束时的处理
-            if (timeLeft < 0) {
-                if (!gameData.holderRewardEnded) {
-                    console.log('持仓奖励倒计时结束，开始快照...');
-                    gameData.holderRewardEnded = true;
-                    this.onHolderRewardEnded();
-                    
-                    // 重置持仓奖励倒计时为3分钟（测试用）
-                    this.holderRewardDate = new Date(Date.now() + 3 * 60 * 1000);
-                    gameData.holderRewardEnded = false;
-                    console.log('持仓奖励倒计时已重置为3分钟');
-                }
-            }
-        }
-        
-            // 开始监控
-            async startMonitoring() {
-                const tokenAddress = document.getElementById('tokenAddress').value.trim();
-                
-                if (!tokenAddress) {
-                    alert('请输入代币地址');
-                    return;
-                }
-                
-                if (this.isMonitoring) return;
-                
-                this.isMonitoring = true;
-                document.getElementById('detectionStatus').innerHTML = '🟢 监控中...';
-                
-                this.addLogEntry('🚀 Solana交易监控已启动', 'info');
-                this.updateSyncStatus('syncing', '启动监控...');
-                
-                // 启动持仓者自动刷新
-                startTopHoldersAutoRefresh(tokenAddress);
-                
-                // 立即获取一次交易记录
-                await this.fetchLatestTransactions(tokenAddress);
-                
-                // 开始定时监控
-                this.monitoringInterval = setInterval(async () => {
-                    if (this.isMonitoring) {
-                        await this.fetchLatestTransactions(tokenAddress);
-                    }
-                }, 3000); // 每3秒检查一次
-            }
-            
-            // 停止监控
-            stopMonitoring() {
-                if (!this.isMonitoring) return;
-                
-                this.isMonitoring = false;
-                document.getElementById('detectionStatus').innerHTML = '🔴 已停止';
-                
-                if (this.monitoringInterval) {
-                    clearInterval(this.monitoringInterval);
-                    this.monitoringInterval = null;
-                }
-                
-                // 停止持仓者自动刷新
-                stopTopHoldersAutoRefresh();
-                
-                this.addLogEntry('⏹️ Solana交易监控已停止', 'warning');
-                this.updateSyncStatus('default', '监控已停止');
-            }
-            
-            // 恢复游戏
-            resumeGame() {
-                gameData.isPaused = false;
-                gameData.isMonitoring = true;
-                this.isMonitoring = true;
-                this.startMonitoring();
-                this.addLogEntry('▶️ 游戏已恢复', 'success');
-                console.log('游戏已恢复');
-            }
-            
-            // 获取最新交易
-            async fetchLatestTransactions(tokenAddress) {
-                try {
-                    this.updateSyncStatus('syncing', '检查新交易...');
-                    
-                    const signatures = await this.makeRpcCall('getSignaturesForAddress', [
-                        tokenAddress,
-                        { limit: 10 }
-                    ]);
-                    
-                    if (!signatures || signatures.length === 0) {
-                        this.updateSyncStatus('success', '无新交易');
-                        return;
-                    }
-                    
-                    // 检查是否有新交易
-                    const latestSignature = signatures[0].signature;
-                    if (this.lastSignature && this.lastSignature === latestSignature) {
-                        this.updateSyncStatus('success', '无新交易');
-                        return; // 没有新交易
-                    }
-                    
-                    // 获取新交易
-                    const newTransactions = [];
-                    for (let i = 0; i < signatures.length; i++) {
-                        const sig = signatures[i];
-                        if (this.lastSignature && sig.signature === this.lastSignature) {
-                            break; // 已经处理过的交易
-                        }
-                        newTransactions.push(sig);
-                    }
-                    
-                    if (newTransactions.length > 0) {
-                        console.log(`检测到 ${newTransactions.length} 笔新交易`);
-                        this.addLogEntry(`🔍 检测到 ${newTransactions.length} 笔新交易`, 'info');
-                        this.updateSyncStatus('syncing', `处理 ${newTransactions.length} 笔交易...`);
-                        
-                        // 获取新交易的详细信息
-                        const transactionDetails = await this.getTransactionDetails(newTransactions, tokenAddress);
-                        
-                        // 添加到交易列表
-                        this.transactions.unshift(...transactionDetails);
-                        
-                        // 保持最多100条记录
-                        if (this.transactions.length > 100) {
-                            this.transactions = this.transactions.slice(0, 100);
-                        }
-                        
-                        // 处理每个新交易
-                        for (const tx of transactionDetails) {
-                            if (tx) {
-                                console.log('处理交易:', tx);
-                                this.processTransaction(tx);
-                            }
-                        }
-                        
-                        this.lastSignature = latestSignature;
-                        this.updateTransactionsDisplay();
-                        this.updateSyncStatus('success', `已同步 ${newTransactions.length} 笔交易`);
-                    } else {
-                        this.updateSyncStatus('success', '无新交易');
-                    }
-                    
-                } catch (error) {
-                    console.error('获取交易失败:', error);
-                    document.getElementById('detectionStatus').innerHTML = '🔴 连接错误';
-                    this.addLogEntry(`❌ 获取交易失败: ${error.message}`, 'error');
-                    this.updateSyncStatus('error', '同步失败');
-                }
-            }
-            
-            // 获取交易详情
-            async getTransactionDetails(signatures, tokenAddress) {
-                const details = [];
-                
-                for (const sig of signatures) {
-                    try {
-                        const txData = await this.makeRpcCall('getTransaction', [
-                            sig.signature,
-                            {
-                                encoding: 'jsonParsed',
-                                maxSupportedTransactionVersion: 0
-                            }
-                        ]);
-                        
-                        const transaction = this.parseTransaction(txData, sig, tokenAddress);
-                        if (transaction) {
-                            details.push(transaction);
-                        }
-                    } catch (error) {
-                        console.warn('获取交易详情失败:', error);
-                    }
-                }
-                
-                return details;
-            }
-            
-            // 解析交易
-            parseTransaction(tx, sig, tokenAddress) {
-                if (!tx || !tx.meta) {
-                    return null;
-                }
-                
-                const tokenInstructions = tx.meta.postTokenBalances || [];
-                const preTokenBalances = tx.meta.preTokenBalances || [];
-                
-                const relevantBalances = tokenInstructions.filter(balance => 
-                    balance.mint === tokenAddress
-                );
-                
-                if (relevantBalances.length === 0) {
-                    return null;
-                }
-                
-                const balanceChanges = relevantBalances.map(balance => {
-                    const preBalance = preTokenBalances.find(pre => 
-                        pre.accountIndex === balance.accountIndex && pre.mint === tokenAddress
-                    );
-                    
-                    const preAmount = preBalance ? parseInt(preBalance.uiTokenAmount.amount) : 0;
-                    const postAmount = parseInt(balance.uiTokenAmount.amount);
-                    const change = postAmount - preAmount;
-                    
-                    return {
-                        account: balance.owner,
-                        change: change,
-                        amount: Math.abs(change)
-                    };
-                });
-                
-                // 获取所有代币余额变化，用于分析买入/卖出
-                const allBalanceChanges = tokenInstructions.map(balance => {
-                    const preBalance = preTokenBalances.find(pre => 
-                        pre.accountIndex === balance.accountIndex && pre.mint === balance.mint
-                    );
-                    
-                    const preAmount = preBalance ? parseInt(preBalance.uiTokenAmount.amount) : 0;
-                    const postAmount = parseInt(balance.uiTokenAmount.amount);
-                    const change = postAmount - preAmount;
-                    
-                    return {
-                        account: balance.owner,
-                        mint: balance.mint,
-                        change: change,
-                        amount: Math.abs(change)
-                    };
-                });
-                
-                return {
-                    signature: sig.signature,
-                    blockTime: sig.blockTime,
-                    amount: balanceChanges[0]?.amount || 0,
-                    type: this.determineTransactionType(balanceChanges),
-                    src: balanceChanges.find(b => b.change < 0)?.account || 'N/A',
-                    dst: balanceChanges.find(b => b.change > 0)?.account || 'N/A',
-                    allBalanceChanges: allBalanceChanges // 添加所有余额变化信息
-                };
-            }
-            
-            // 确定交易类型
-            determineTransactionType(balanceChanges) {
-                if (balanceChanges.length === 0) return '转移';
-                
-                const hasMint = balanceChanges.some(b => b.change > 0 && b.account === '11111111111111111111111111111111');
-                const hasBurn = balanceChanges.some(b => b.change < 0 && b.account === '11111111111111111111111111111111');
-                
-                if (hasMint) return '铸造';
-                if (hasBurn) return '销毁';
-                return '转移';
-            }
-            
-            // 处理交易
-            processTransaction(tx) {
-                const tradeType = this.determineTradeType(tx);
-                const timeToAdd = 60; // 每次买入交易增加60秒
-                const amount = this.formatNumber(tx.amount, 9);
-                this.transactionCount++;
+// 执行代币转账
+async function transferTokens(toWallet, amount) {
+  try {
+    const mint = new PublicKey(mintAddress);
+    const toWalletPubkey = new PublicKey(toWallet);
 
-                        // 游戏逻辑：检查是否达到100000数量阈值并增加倒计时
-        if (tradeType === '买入') {
-            // 检查是否达到100000数量阈值
-            if (tx.amount >= 100000) {
-                // 检查是否超过10分钟上限
-                const currentAdjustment = this.totalTimeAdjustment + gameData.countdownIncrement;
-                if (currentAdjustment <= gameData.maxCountdown) {
-                    this.totalTimeAdjustment = currentAdjustment;
-                    this.countdownDate.setTime(this.countdownDate.getTime() + (gameData.countdownIncrement * 1000));
-                    
-                    // 更新显示
-                    document.getElementById('transactionCount').innerText = this.transactionCount;
-                    document.getElementById('timeAdjustment').innerText = `+${this.totalTimeAdjustment} 秒`;
-                    this.addLogEntry(`💰 检测到大额买入交易 #${this.transactionCount}！数量: ${amount}，倒计时 +${gameData.countdownIncrement}秒`, 'success');
-                    
-                    // 记录成功增加倒计时的地址
-                    addSuccessAddress(tx.dst, amount, tx.blockTime);
-                    
-                    // 更新游戏数据中的最后大额买入地址
-                    gameData.lastBigBuyAddress = tx.dst;
-                    gameData.lastBigBuyAmount = tx.amount;
-                    
-                    // 保存交易记录到Firebase
-                    this.saveTransactionToFirebase(tx);
-                    
-                    // 添加视觉反馈
-                    document.getElementById('timeAdjustment').classList.add('animate-pulse');
-                    setTimeout(() => {
-                        document.getElementById('timeAdjustment').classList.remove('animate-pulse');
-                    }, 1000);
-                } else {
-                    this.addLogEntry(`⚠️ 大额买入交易 #${this.transactionCount} 检测到，但已达到10分钟上限！`, 'warning');
-                }
-            } else {
-                // 买入数量不足100000，只记录日志
-                this.addLogEntry(`检测到小额买入交易 #${this.transactionCount}，数量: ${amount}，未达到100000阈值`, 'info');
-            }
-        } else {
-            // 非买入交易只记录日志
-            this.addLogEntry(`检测到${tradeType}交易 #${this.transactionCount}，数量: ${amount}，不增加倒计时`, 'info');
-        }
-            }
-            
-            // 判断是否为LP池地址
-            isLpAddress(address) {
-                if (!address) return false;
-                // 这里可以维护多个池子地址
-                const lpAddresses = [
-                    'WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh',
-                    // 未来可扩展更多池子
-                ];
-                return lpAddresses.includes(address);
-            }
+    // 获取或创建用户的ATA
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer,
+      mint,
+      toWalletPubkey
+    );
 
-            // 只根据LP池判断买入/卖出
-            determineTradeType(tx) {
-                // 只判断LP池
-                if (tx.type === '铸造') {
-                    return '买入';
-                } else if (tx.type === '销毁') {
-                    return '卖出';
-                } else if (tx.type === '转移') {
-                    const isSrcLp = this.isLpAddress(tx.src);
-                    const isDstLp = this.isLpAddress(tx.dst);
-                    if (isSrcLp && !isDstLp) {
-                        return '买入';
-                    } else if (isDstLp && !isSrcLp) {
-                        return '卖出';
-                    } else {
-                        return '转移';
-                    }
-                }
-                return '转移';
-            }
-            
-            // 更新交易显示
-            updateTransactionsDisplay() {
-                const tbody = document.getElementById('detailedTransactionTable');
-                
-                if (!tbody) {
-                    console.error('找不到详细交易表格元素');
-                    return;
-                }
-                
-                console.log('更新详细交易表格，记录数量:', this.transactions.length);
-                
-                // 更新计数器
-                const detailedCount = document.getElementById('detailedCount');
-                if (detailedCount) {
-                    detailedCount.textContent = `${this.transactions.length} 条记录`;
-                }
-                
-                if (this.transactions.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 italic p-4">暂无交易记录</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = '';
-                
-                this.transactions.forEach((tx, index) => {
-                    const row = document.createElement('tr');
-                    // 新交易高亮效果
-                    if (index < 5) {
-                        row.classList.add('bg-green-900', 'bg-opacity-20');
-                    }
-                    // 根据交易类型设置颜色
-                    let typeClass = 'text-gray-300';
-                    const tradeType = this.determineTradeType(tx);
-                    if (tradeType === '买入') {
-                        typeClass = 'text-green-400 font-bold';
-                    } else if (tradeType === '卖出') {
-                        typeClass = 'text-red-400 font-bold';
-                    } else if (tradeType === '转移') {
-                        typeClass = 'text-blue-400 font-bold';
-                    }
-                    const timestamp = new Date(tx.blockTime * 1000).toLocaleString('zh-CN');
-                    const amount = this.formatNumber(tx.amount, 9);
-                    // 交易者逻辑
-                    let trader = '';
-                    if (tradeType === '买入') {
-                        trader = tx.dst;
-                    } else if (tradeType === '卖出') {
-                        trader = tx.src;
-                    } else {
-                        trader = tx.src + ' → ' + tx.dst;
-                    }
-                    row.innerHTML = `
-                        <td class="p-2 text-gray-400">${timestamp}</td>
-                        <td class="p-2">
-                            <span class="${typeClass}">${tradeType}</span>
-                        </td>
-                        <td class="p-2 text-white font-bold">${amount}</td>
-                        <td class="p-2">
-                            <span class="text-blue-400 cursor-pointer hover:text-blue-300" onclick="window.open('https://solscan.io/account/${trader}', '_blank')" title="${trader}">
-                                ${trader ? trader.substring(0, 6) + '...' + trader.substring(trader.length - 4) : 'N/A'}
-                            </span>
-                        </td>
-                        <td class="p-2">
-                            <span class="text-memeYellow cursor-pointer hover:text-yellow-300" onclick="window.open('https://solscan.io/tx/${tx.signature}', '_blank')" title="${tx.signature}">
-                                ${tx.signature.substring(0, 6)}...${tx.signature.substring(tx.signature.length - 4)}
-                            </span>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                
-                console.log('详细交易表格更新完成');
-            }
-            
-            // 格式化数字
-            formatNumber(amount, decimals) {
-                if (!amount) return '0';
-                const num = parseFloat(amount) / Math.pow(10, decimals || 9);
-                return num.toLocaleString('zh-CN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6
-                });
-            }
-            
-            // RPC调用
-            async makeRpcCall(method, params, endpointIndex = 0) {
-                const endpoint = this.rpcEndpoints[endpointIndex];
-                
-                // 更新当前RPC显示
-                this.updateCurrentRpc(endpoint, endpointIndex);
-                
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: Math.floor(Math.random() * 1000),
-                            method: method,
-                            params: params
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        throw new Error(`RPC Error: ${data.error.message}`);
-                    }
-                    
-                    // 成功使用当前RPC
-                    this.updateCurrentRpc(endpoint, endpointIndex, true);
-                    return data.result;
-                } catch (error) {
-                    console.warn(`RPC调用失败 (${endpoint}):`, error);
-                    
-                    // 标记当前RPC失败
-                    this.updateCurrentRpc(endpoint, endpointIndex, false);
-                    
-                    if (endpointIndex < this.rpcEndpoints.length - 1) {
-                        return await this.makeRpcCall(method, params, endpointIndex + 1);
-                    }
-                    
-                    throw error;
-                }
-            }
-            
-            // 更新RPC状态
-            updateCurrentRpc(endpoint, index, success = null) {
-                const rpcNames = ['QuickNode', 'Solana官方', 'Project Serum'];
-                const rpcName = rpcNames[index] || `RPC ${index + 1}`;
-                
-                let status = '';
-                if (success === true) {
-                    status = '✅';
-                } else if (success === false) {
-                    status = '❌';
-                } else {
-                    status = '🔄';
-                }
-                
-                document.getElementById('rpcStatus').textContent = `${status} ${rpcName}`;
-            }
-            
-            // 更新同步状态
-            updateSyncStatus(status, message) {
-                const indicator = document.getElementById('syncIndicator');
-                const statusText = document.getElementById('syncStatus');
-                
-                if (!indicator || !statusText) return;
-                
-                switch (status) {
-                    case 'syncing':
-                        indicator.className = 'w-2 h-2 bg-yellow-500 rounded-full animate-pulse';
-                        statusText.textContent = '同步中...';
-                        statusText.className = 'text-xs text-yellow-400';
-                        break;
-                    case 'success':
-                        indicator.className = 'w-2 h-2 bg-green-500 rounded-full';
-                        statusText.textContent = message || '同步完成';
-                        statusText.className = 'text-xs text-green-400';
-                        break;
-                    case 'error':
-                        indicator.className = 'w-2 h-2 bg-red-500 rounded-full';
-                        statusText.textContent = message || '同步错误';
-                        statusText.className = 'text-xs text-red-400';
-                        break;
-                    default:
-                        indicator.className = 'w-2 h-2 bg-gray-500 rounded-full';
-                        statusText.textContent = message || '等待同步...';
-                        statusText.className = 'text-xs text-gray-400';
-                }
-            }
-            
-            // 添加日志
-            addLogEntry(message, type = 'info') {
-                const logContainer = document.getElementById('transactionLog');
-                const timestamp = new Date().toLocaleTimeString();
-                
-                let colorClass = 'text-gray-300';
-                if (type === 'success') colorClass = 'text-green-400';
-                else if (type === 'warning') colorClass = 'text-yellow-400';
-                else if (type === 'error') colorClass = 'text-red-400';
-                
-                const logEntry = document.createElement('div');
-                logEntry.className = colorClass;
-                logEntry.innerHTML = `[${timestamp}] ${message}`;
-                
-                // 移除等待消息
-                const waitingMsg = logContainer.querySelector('.text-gray-500');
-                if (waitingMsg) {
-                    waitingMsg.remove();
-                }
-                
-                logContainer.insertBefore(logEntry, logContainer.firstChild);
-                
-                // 限制日志条目数量为100条
-                while (logContainer.children.length > 100) {
-                    logContainer.removeChild(logContainer.lastChild);
-                }
-            }
-            
-            // 模拟交易功能已移至管理面板
-            
-            // 重置倒计时功能已移至管理面板
-            
-            // 倒计时结束时的处理
-            async onCountdownEnded() {
-                this.addLogEntry('🎉 倒计时结束！开始自动捕捉数据...', 'success');
-                
-                try {
-                    // 1. 自动获取持仓前20的地址
-                    await this.captureTop20Holders();
-                    
-                    // 2. 记录最后大额买入地址
-                    this.captureLastBigBuyAddress();
-                    
-                    // 3. 触发奖励发放
-                    this.triggerRewards();
-                    
-                    // 4. 更新奖励页面数据
-                    this.updateRewardData();
-                    
-                } catch (error) {
-                    this.addLogEntry(`❌ 自动捕捉数据失败: ${error.message}`, 'error');
-                }
-            }
-            
-            // 持仓奖励倒计时结束时的处理
-            async onHolderRewardEnded() {
-                this.addLogEntry('🏆 持仓奖励快照开始！开始捕捉前20持有者...', 'success');
-                
-                try {
-                    // 1. 捕捉当前持仓前20持有者
-                    await this.captureTop20Holders();
-                    
-                    // 2. 保存持仓奖励轮次
-                    this.saveHolderRewardRound();
-                    
-                    // 3. 更新持仓奖励页面数据
-                    this.updateHolderRewardData();
-                    
-                    // 4. 记录日志
-                    this.addLogEntry('🏆 持仓奖励快照完成，前20持有者已记录，倒计时已重置为3分钟', 'success');
-                    
-                } catch (error) {
-                    this.addLogEntry(`❌ 持仓奖励快照失败: ${error.message}`, 'error');
-                }
-            }
-            
-            // 自动捕捉持仓前20持有者
-            async captureTop20Holders() {
-                const tokenAddress = document.getElementById('tokenAddress').value.trim();
-                if (!tokenAddress) {
-                    throw new Error('代币地址未设置');
-                }
-                
-                try {
-                    // 使用现有的fetchTopHolders逻辑获取前20名
-                    const data = await this.makeRpcCall('getProgramAccounts', [
-                        'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-                        {
-                            encoding: 'jsonParsed',
-                            filters: [
-                                { dataSize: 165 },
-                                { memcmp: { offset: 0, bytes: tokenAddress } }
-                            ]
-                        }
-                    ]);
-                    
-                    if (data && Array.isArray(data) && data.length > 0) {
-                        // 统计所有owner和余额，排除LP池子
-                        const holders = {};
-                        const lpAddresses = ['WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh'];
-                        
-                        data.forEach(acc => {
-                            const owner = acc.account.data.parsed.info.owner;
-                            const amount = parseInt(acc.account.data.parsed.info.tokenAmount.amount);
-                            if (lpAddresses.includes(owner)) return;
-                            if (!holders[owner]) holders[owner] = 0;
-                            holders[owner] += amount;
-                        });
-                        
-                        // 排序取前20
-                        const sorted = Object.entries(holders)
-                            .sort((a, b) => b[1] - a[1])
-                            .slice(0, 20);
-                        
-                        gameData.top20Holders = sorted.map(([address, amount], index) => ({
-                            rank: index + 1,
-                            address: address,
-                            amount: amount
-                        }));
-                        
-                        this.addLogEntry(`📊 成功捕捉持仓前20持有者数据，共${gameData.top20Holders.length}个地址`, 'success');
-                        
-                        // 保存持仓数据到Firebase
-                        this.saveHoldersDataToFirebase(gameData.top20Holders);
-                    }
-                } catch (error) {
-                    throw new Error(`获取持仓数据失败: ${error.message}`);
-                }
-            }
-            
-            // 捕捉最后大额买入地址
-            captureLastBigBuyAddress() {
-                if (gameData.lastBigBuyAddress) {
-                    this.addLogEntry(`💰 最后大额买入地址: ${gameData.lastBigBuyAddress.substring(0, 6)}...${gameData.lastBigBuyAddress.substring(gameData.lastBigBuyAddress.length - 4)}`, 'success');
-                } else {
-                    this.addLogEntry('⚠️ 未找到最后大额买入地址', 'warning');
-                }
-            }
-            
-            // 触发奖励发放
-            triggerRewards() {
-                const currentTime = Date.now();
-                
-                // 检查是否到了20分钟奖励时间
-                if (currentTime - gameData.lastRewardTime >= gameData.top20RewardInterval * 1000) {
-                    this.distributeTop20Reward();
-                    gameData.lastRewardTime = currentTime;
-                }
-                
-                // 发放最后大额买入奖励
-                this.distributeLastBigBuyReward();
-            }
-            
-            // 分发前20名奖励
-            distributeTop20Reward() {
-                if (gameData.top20Holders.length > 0) {
-                    const rewardPerHolder = gameData.top20Reward / gameData.top20Holders.length;
-                    this.addLogEntry(`🏆 前20名奖励分发: 每人${rewardPerHolder.toFixed(3)}%代币`, 'success');
-                }
-            }
-            
-            // 分发最后大额买入奖励
-            distributeLastBigBuyReward() {
-                if (gameData.lastBigBuyAddress) {
-                    this.addLogEntry(`💰 最后大额买入奖励: ${gameData.lastBigBuyReward}%代币发放给${gameData.lastBigBuyAddress.substring(0, 6)}...${gameData.lastBigBuyAddress.substring(gameData.lastBigBuyAddress.length - 4)}`, 'success');
-                }
-            }
-            
-            // 更新奖励数据
-            updateRewardData() {
-                rewardData.countdownEnded = true;
-                rewardData.top20Holders = gameData.top20Holders;
-                rewardData.lastSuccessAddress = gameData.lastBigBuyAddress;
-                rewardData.lastSuccessAmount = gameData.lastBigBuyAmount;
-                
-                // 保存到Firebase
-                this.saveGameDataToFirebase();
-            }
-            
-            // 保存持仓奖励轮次
-            saveHolderRewardRound() {
-                try {
-                    const roundId = `holder_round_${Date.now()}`;
-                    const holderRewardData = {
-                        roundId: roundId,
-                        timestamp: Date.now(),
-                        type: 'holder_reward',
-                        top20Holders: gameData.top20Holders,
-                        tokenAddress: document.getElementById('tokenAddress').value.trim(),
-                        isClaimed: false
-                    };
-                    
-                    // 保存到Firebase
-                    database.ref('holderRewardRounds').child(roundId).set(holderRewardData)
-                        .then(() => {
-                            console.log('持仓奖励轮次已保存到Firebase，轮次ID:', roundId);
-                            this.addLogEntry('📊 持仓奖励轮次已同步到云端', 'success');
-                            
-                            // 保存当前持仓奖励轮次ID到本地
-                            this.currentHolderRewardRoundId = roundId;
-                        })
-                        .catch((error) => {
-                            console.error('保存持仓奖励轮次失败:', error);
-                            this.addLogEntry('❌ 持仓奖励轮次同步失败', 'error');
-                        });
-                } catch (error) {
-                    console.error('Firebase持仓奖励轮次保存错误:', error);
-                }
-            }
-            
-            // 更新持仓奖励页面数据
-            updateHolderRewardData() {
-                // 更新持仓奖励相关的页面数据
-                if (gameData.top20Holders.length > 0) {
-                    // 这里可以更新持仓奖励相关的UI元素
-                    console.log('持仓奖励数据已更新');
-                }
-            }
-            
-            // Firebase数据管理
-            saveGameDataToFirebase() {
-                try {
-                    const roundId = `round_${Date.now()}`;
-                    const gameDataToSave = {
-                        roundId: roundId,
-                        timestamp: Date.now(),
-                        countdownEnded: gameData.countdownEnded,
-                        top20Holders: gameData.top20Holders,
-                        lastBigBuyAddress: gameData.lastBigBuyAddress,
-                        lastBigBuyAmount: gameData.lastBigBuyAmount,
-                        transactionCount: this.transactionCount,
-                        totalTimeAdjustment: this.totalTimeAdjustment,
-                        successAddresses: successAddresses,
-                        tokenAddress: document.getElementById('tokenAddress').value.trim(),
-                        isClaimed: false // 标记是否已领取奖励
-                    };
-                    
-                    // 保存到Firebase Realtime Database
-                    database.ref('gameRounds').child(roundId).set(gameDataToSave)
-                        .then(() => {
-                            console.log('游戏数据已保存到Firebase，轮次ID:', roundId);
-                            this.addLogEntry('📊 游戏数据已同步到云端', 'success');
-                            
-                            // 保存当前轮次ID到本地
-                            this.currentRoundId = roundId;
-                        })
-                        .catch((error) => {
-                            console.error('保存到Firebase失败:', error);
-                            this.addLogEntry('❌ 云端同步失败', 'error');
-                        });
-                } catch (error) {
-                    console.error('Firebase保存错误:', error);
-                }
-            }
-            
-            // 从Firebase加载游戏数据
-            loadGameDataFromFirebase() {
-                try {
-                    database.ref('gameRounds').orderByChild('timestamp').limitToLast(1).once('value')
-                        .then((snapshot) => {
-                            if (snapshot.exists()) {
-                                const data = Object.values(snapshot.val())[0];
-                                this.restoreGameData(data);
-                                this.addLogEntry('📊 已从云端加载游戏数据', 'success');
-                            }
-                        })
-                        .catch((error) => {
-                            console.error('从Firebase加载失败:', error);
-                            this.addLogEntry('❌ 云端数据加载失败', 'error');
-                        });
-                        
-                    // 同时加载最新的持仓奖励轮次ID
-                    this.loadLatestHolderRewardRoundId();
-                } catch (error) {
-                    console.error('Firebase加载错误:', error);
-                }
-            }
-            
-            // 加载最新的持仓奖励轮次ID
-            loadLatestHolderRewardRoundId() {
-                try {
-                    database.ref('holderRewardRounds').orderByChild('timestamp').limitToLast(1).once('value')
-                        .then((snapshot) => {
-                            if (snapshot.exists()) {
-                                const data = Object.values(snapshot.val())[0];
-                                this.currentHolderRewardRoundId = data.roundId;
-                                console.log('已加载最新持仓奖励轮次ID:', this.currentHolderRewardRoundId);
-                            }
-                        })
-                        .catch((error) => {
-                            console.error('加载持仓奖励轮次ID失败:', error);
-                        });
-                } catch (error) {
-                    console.error('加载持仓奖励轮次ID错误:', error);
-                }
-            }
-            
-            // 获取所有获奖轮次数据
-            getAllWinnerRounds() {
-                return new Promise((resolve, reject) => {
-                    try {
-                        database.ref('gameRounds').orderByChild('timestamp').once('value')
-                            .then((snapshot) => {
-                                if (snapshot.exists()) {
-                                    const rounds = [];
-                                    snapshot.forEach((childSnapshot) => {
-                                        const roundData = childSnapshot.val();
-                                        if (roundData.countdownEnded) {
-                                            rounds.push(roundData);
-                                        }
-                                    });
-                                    resolve(rounds.reverse()); // 最新的在前面
-                                } else {
-                                    resolve([]);
-                                }
-                            })
-                            .catch((error) => {
-                                console.error('获取获奖轮次失败:', error);
-                                reject(error);
-                            });
-                    } catch (error) {
-                        console.error('获取获奖轮次错误:', error);
-                        reject(error);
-                    }
-                });
-            }
-            
-            // 获取所有持仓奖励轮次数据
-            getAllHolderRewardRounds() {
-                return new Promise((resolve, reject) => {
-                    try {
-                        database.ref('holderRewardRounds').orderByChild('timestamp').once('value')
-                            .then((snapshot) => {
-                                if (snapshot.exists()) {
-                                    const rounds = [];
-                                    snapshot.forEach((childSnapshot) => {
-                                        const roundData = childSnapshot.val();
-                                        rounds.push(roundData);
-                                    });
-                                    resolve(rounds.reverse()); // 最新的在前面
-                                } else {
-                                    resolve([]);
-                                }
-                            })
-                            .catch((error) => {
-                                console.error('获取持仓奖励轮次失败:', error);
-                                reject(error);
-                            });
-                    } catch (error) {
-                        console.error('获取持仓奖励轮次错误:', error);
-                        reject(error);
-                    }
-                });
-            }
-            
-            // 标记轮次为已领取
-            markRoundAsClaimed(roundId) {
-                try {
-                    database.ref('gameRounds').child(roundId).update({
-                        isClaimed: true,
-                        claimedAt: Date.now()
-                    }).then(() => {
-                        console.log('轮次已标记为已领取:', roundId);
-                    }).catch((error) => {
-                        console.error('标记轮次失败:', error);
-                    });
-                } catch (error) {
-                    console.error('标记轮次错误:', error);
-                }
-            }
-            
-            // 恢复游戏数据
-            restoreGameData(data) {
-                if (data) {
-                    gameData.countdownEnded = data.countdownEnded || false;
-                    gameData.top20Holders = data.top20Holders || [];
-                    gameData.lastBigBuyAddress = data.lastBigBuyAddress || null;
-                    gameData.lastBigBuyAmount = data.lastBigBuyAmount || 0;
-                    
-                    this.transactionCount = data.transactionCount || 0;
-                    this.totalTimeAdjustment = data.totalTimeAdjustment || 0;
-                    
-                    // 恢复轮次ID
-                    if (data.roundId) {
-                        this.currentRoundId = data.roundId;
-                    }
-                    
-                    if (data.successAddresses) {
-                        successAddresses = data.successAddresses;
-                        updateSuccessAddressesDisplay();
-                    }
-                    
-                    // 更新显示
-                    document.getElementById('transactionCount').innerText = this.transactionCount;
-                    document.getElementById('timeAdjustment').innerText = `+${this.totalTimeAdjustment} 秒`;
-                }
-            }
-            
-            // 保存交易记录到Firebase
-            saveTransactionToFirebase(transaction) {
-                try {
-                    const transactionData = {
-                        timestamp: Date.now(),
-                        signature: transaction.signature,
-                        type: transaction.type,
-                        amount: transaction.amount,
-                        blockTime: transaction.blockTime,
-                        src: transaction.src,
-                        dst: transaction.dst,
-                        tradeType: this.determineTradeType(transaction)
-                    };
-                    
-                    database.ref('transactions').push(transactionData)
-                        .then(() => {
-                            console.log('交易记录已保存到Firebase');
-                        })
-                        .catch((error) => {
-                            console.error('保存交易记录失败:', error);
-                        });
-                } catch (error) {
-                    console.error('Firebase交易保存错误:', error);
-                }
-            }
-            
-            // 保存持仓数据到Firebase
-            saveHoldersDataToFirebase(holders) {
-                try {
-                    const holdersData = {
-                        timestamp: Date.now(),
-                        tokenAddress: document.getElementById('tokenAddress').value.trim(),
-                        holders: holders
-                    };
-                    
-                    database.ref('holdersData').push(holdersData)
-                        .then(() => {
-                            console.log('持仓数据已保存到Firebase');
-                        })
-                        .catch((error) => {
-                            console.error('保存持仓数据失败:', error);
-                        });
-                } catch (error) {
-                    console.error('Firebase持仓数据保存错误:', error);
-                }
-            }
-            
-            // 游戏暂停
-            pauseGame() {
-                // 停止监控
-                this.stopMonitoring();
-                
-                // 显示游戏暂停界面
-                this.showGamePauseScreen();
-                
-                // 10秒后自动开始下一轮
-                setTimeout(() => {
-                    this.startNextRound();
-                }, 10000);
-            }
-            
-            // 显示游戏暂停界面
-            showGamePauseScreen() {
-                // 创建游戏暂停遮罩
-                let pauseOverlay = document.getElementById('gamePauseOverlay');
-                if (!pauseOverlay) {
-                    pauseOverlay = document.createElement('div');
-                    pauseOverlay.id = 'gamePauseOverlay';
-                    pauseOverlay.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70]';
-                    document.body.appendChild(pauseOverlay);
-                }
-                
-                pauseOverlay.innerHTML = `
-                    <div class="bg-gray-800 border-meme p-8 rounded-xl shadow-lg text-center max-w-md mx-4">
-                        <div class="text-6xl mb-4">🎉</div>
-                        <h2 class="text-memeYellow font-bold text-2xl mb-4">游戏结束！</h2>
-                        <p class="text-white text-lg mb-6">本轮游戏已结束，请玩家领取奖励</p>
-                        
-                        <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
-                            <div class="text-memePink font-bold mb-2">本轮数据：</div>
-                            <div class="text-gray-300 text-sm space-y-1">
-                                <div>• 总交易次数：${this.transactionCount}</div>
-                                <div>• 倒计时调整：+${this.totalTimeAdjustment} 秒</div>
-                                <div>• 最后大额买入：${gameData.lastBigBuyAddress ? gameData.lastBigBuyAddress.substring(0, 6) + '...' + gameData.lastBigBuyAddress.substring(gameData.lastBigBuyAddress.length - 4) : '无'}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-4 mb-6">
-                            <button onclick="window.solanaTracker.showRewardPage()" class="flex-1 bg-memeGreen hover:bg-green-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300">
-                                🎁 领取奖励
-                            </button>
-                            <button onclick="window.solanaTracker.moveToBottomLeft()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300">
-                                📍 移至左下角
-                            </button>
-                        </div>
-                        
-                        <div class="text-memeYellow font-bold text-lg">
-                            <span id="nextRoundCountdown">10</span> 秒后自动开始下一轮
-                        </div>
-                    </div>
-                `;
-                
-                pauseOverlay.classList.remove('hidden');
-                
-                // 开始倒计时
-                this.startNextRoundCountdown();
-            }
-            
-            // 隐藏游戏暂停界面
-            hideGamePauseScreen() {
-                const pauseOverlay = document.getElementById('gamePauseOverlay');
-                if (pauseOverlay) {
-                    pauseOverlay.classList.add('hidden');
-                }
-            }
-            
-            // 移动到左下角
-            moveToBottomLeft() {
-                const pauseOverlay = document.getElementById('gamePauseOverlay');
-                if (pauseOverlay) {
-                    // 移除全屏遮罩样式
-                    pauseOverlay.className = 'fixed bottom-4 left-4 w-80 bg-gray-800 border-meme p-4 rounded-xl shadow-lg z-50';
-                    
-                    // 更新内容为紧凑版本
-                    pauseOverlay.innerHTML = `
-                        <div class="text-center">
-                            <div class="text-2xl mb-2">🎉</div>
-                            <h3 class="text-memeYellow font-bold text-lg mb-2">游戏结束</h3>
-                            <p class="text-gray-300 text-sm mb-3">请领取奖励</p>
-                            
-                            <div class="bg-gray-700 border-meme p-2 rounded mb-3">
-                                <div class="text-memePink font-bold text-xs mb-1">本轮数据：</div>
-                                <div class="text-gray-300 text-xs space-y-1">
-                                    <div>交易：${this.transactionCount}</div>
-                                    <div>调整：+${this.totalTimeAdjustment}s</div>
-                                    <div>最后：${gameData.lastBigBuyAddress ? gameData.lastBigBuyAddress.substring(0, 4) + '...' + gameData.lastBigBuyAddress.substring(gameData.lastBigBuyAddress.length - 4) : '无'}</div>
-                                </div>
-                            </div>
-                            
-                            <div class="flex gap-2 mb-3">
-                                <button onclick="window.solanaTracker.showRewardPage()" class="flex-1 bg-memeGreen hover:bg-green-600 text-white font-bold py-2 px-3 rounded border-meme transition-all duration-300 text-xs">
-                                    🎁 领取
-                                </button>
-                            </div>
-                            
-                            <div class="text-memeYellow font-bold text-sm">
-                                <span id="nextRoundCountdown">10</span>s 后重启
-                            </div>
-                        </div>
-                    `;
-                    
-                    // 重新开始倒计时
-                    this.startNextRoundCountdown();
-                }
-            }
-            
-            // 下一轮倒计时
-            startNextRoundCountdown() {
-                let countdown = 10;
-                const countdownElement = document.getElementById('nextRoundCountdown');
-                
-                const timer = setInterval(() => {
-                    countdown--;
-                    if (countdownElement) {
-                        countdownElement.textContent = countdown;
-                    }
-                    
-                    if (countdown <= 0) {
-                        clearInterval(timer);
-                        // 倒计时结束后自动开始下一轮
-                        this.startNextRound();
-                    }
-                }, 1000);
-            }
-            
-            // 开始下一轮游戏
-            startNextRound() {
-                // 隐藏暂停界面
-                this.hideGamePauseScreen();
-                
-                // 重置倒计时到初始状态（5分钟）
-                this.countdownDate = new Date();
-                this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
-                this.originalCountdownDate = new Date(this.countdownDate);
-                this.totalTimeAdjustment = 0;
-                this.transactionCount = 0;
-                
-                // 恢复倒计时显示结构
-                const countdownElement = document.getElementById("countdown");
-                countdownElement.innerHTML = `
-                    <!-- 分 -->
-                    <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                        <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">05</div>
-                        <div class="text-white font-bold">MINUTES</div>
-                    </div>
-                    
-                    <!-- 秒 -->
-                    <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                        <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
-                        <div class="text-black font-bold">SECONDS</div>
-                    </div>
-                `;
-                
-                // 更新显示
-                document.getElementById('transactionCount').innerText = '0';
-                document.getElementById('timeAdjustment').innerText = '+0 秒';
-                
-                // 清空详细交易表格
-                this.updateTransactionsDisplay();
-                
-                // 更新计数器
-                const detailedCount = document.getElementById('detailedCount');
-                if (detailedCount) {
-                    detailedCount.textContent = '0 条记录';
-                }
-                
-                // 重置游戏状态（保留数据）
-                this.resetGameState();
-                
-                // 重新启动倒计时更新
-                this.startCountdownUpdate();
-                
-                // 添加日志
-                this.addLogEntry('🔄 新一轮游戏开始！倒计时已重置为5分钟', 'success');
-                
-                // 不自动开始监控，等待管理面板指令
-            }
-            
+    // 获取 payer 的ATA
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer,
+      mint,
+      payer.publicKey
+    );
 
-            
-            // 重置游戏状态（保留数据）
-            resetGameState() {
-                // 只重置游戏状态，保留数据
-                gameData.countdownEnded = false;
-                gameData.lastRewardTime = 0;
-                
-                rewardData.countdownEnded = false;
-                
-                // 保留以下数据：
-                // - gameData.top20Holders (持仓前20数据)
-                // - gameData.lastBigBuyAddress (最后大额买入地址)
-                // - gameData.lastBigBuyAmount (最后大额买入数量)
-                // - rewardData.top20Holders (奖励页面数据)
-                // - rewardData.lastSuccessAddress (奖励页面最后地址)
-                // - rewardData.lastSuccessAmount (奖励页面最后数量)
-                // - successAddresses (成功地址列表)
+    // 转账
+    const tokenAmount = amount * Math.pow(10, GAME_CONFIG.TOKEN_DECIMALS);
+    const sig = await transfer(
+      connection,
+      payer,
+      fromTokenAccount.address,
+      toTokenAccount.address,
+      payer,
+      tokenAmount
+    );
+
+    return sig;
+  } catch (error) {
+    throw new Error(`代币转账失败: ${error.message}`);
+  }
+}
+
+// 记录奖励领取
+async function recordRewardClaim(wallet, roundId, rewardType, amount, txHash) {
+  try {
+    const claimData = {
+      wallet: wallet,
+      roundId: roundId,
+      rewardType: rewardType,
+      amount: amount,
+      txHash: txHash,
+      claimedAt: Date.now()
+    };
+    
+    // 记录到已领取奖励
+    const claimedRef = admin.database().ref(`claimedRewards/${rewardType}/${roundId}/${wallet}`);
+    await claimedRef.set(claimData);
+    
+    // 记录到奖励历史
+    const historyRef = admin.database().ref(`rewardHistory`);
+    await historyRef.push(claimData);
+    
+    console.log(`奖励领取记录已保存: ${wallet} - ${rewardType} - ${roundId}`);
+  } catch (error) {
+    console.error("记录奖励领取失败:", error);
+    throw new Error(`记录奖励领取失败: ${error.message}`);
+  }
+}
+
+// 安全的对象属性检查
+function safeHasOwnProperty(obj, key) {
+  return obj != null && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+// 清理数据，确保所有值都是可序列化的
+function sanitizeData(data) {
+  // 处理 null 和 undefined
+  if (data === null || data === undefined) {
+    return null;
+  }
+  
+  // 处理基本类型
+  if (typeof data === 'string' || typeof data === 'number' || typeof data === 'boolean') {
+    return data;
+  }
+  
+  // 处理 Date 对象
+  if (data instanceof Date) {
+    return data.getTime();
+  }
+  
+  // 处理 Buffer 对象
+  if (Buffer.isBuffer(data)) {
+    return data.toString('base64');
+  }
+  
+  // 处理数组
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeData(item)).filter(item => item !== undefined);
+  }
+  
+  // 处理对象
+  if (typeof data === 'object' && data !== null) {
+    const sanitized = {};
+    
+    try {
+      // 安全地遍历对象属性
+      for (const key in data) {
+        if (safeHasOwnProperty(data, key)) {
+          const value = data[key];
+          if (value !== undefined && typeof key === 'string') {
+            const sanitizedValue = sanitizeData(value);
+            if (sanitizedValue !== undefined) {
+              sanitized[key] = sanitizedValue;
             }
-            
-            // 显示奖励页面
-            showRewardPage() {
-                const rewardPage = document.getElementById('rewardPage');
-                if (rewardPage) {
-                    rewardPage.classList.remove('hidden');
-                    updateRewardPageData();
-                }
-            }
+          }
         }
-        
-        // 初始化应用
-        document.addEventListener('DOMContentLoaded', async () => {
-            // 从Firebase加载代币地址
-            await loadTokenAddressFromFirebase();
-            
-            // 启动监听器监听地址变化
-            listenToTokenAddressChanges();
-            
-            // 启动监听器监听管理面板控制指令
-            listenToAdminControl();
-            
-            // 初始化Solana交易追踪器
-            window.solanaTracker = new SolanaTransactionTracker();
-            
-            // 初始化钱包管理器
-            window.walletManager = new WalletManager();
-            window.walletManager.init();
-            
-            // 不自动启动持仓者刷新，等待管理面板指令
-        });
-        
-        // 添加一些互动效果
-        document.querySelectorAll('button, a').forEach(el => {
-            el.addEventListener('click', function(e) {
-                // 防止链接默认行为
-                if (el.tagName === 'A') e.preventDefault();
-                
-                // 添加点击动画
-                this.classList.add('scale-90');
-                setTimeout(() => {
-                    this.classList.remove('scale-90');
-                }, 150);
+      }
+      
+      // 额外处理 Object.entries 可能遗漏的属性
+      const entries = Object.entries(data);
+      for (const [key, value] of entries) {
+        if (value !== undefined && typeof key === 'string' && !safeHasOwnProperty(sanitized, key)) {
+          const sanitizedValue = sanitizeData(value);
+          if (sanitizedValue !== undefined) {
+            sanitized[key] = sanitizedValue;
+          }
+        }
+      }
+      
+      return sanitized;
+    } catch (error) {
+      console.error('对象序列化失败:', error);
+      return {};
+    }
+  }
+  
+  // 其他类型返回 null
+  return null;
+}
+
+// 主领取函数
+exports.claimGameReward = functions.https.onCall(async (data, context) => {
+  try {
+    const { wallet, rewardType, roundId } = data;
+    
+    console.log("claimGameReward收到的参数:", { wallet, rewardType, roundId });
+    console.log("使用sanitizeData清理返回数据");
+    
+    // 参数验证
+    if (!wallet) {
+      throw new functions.https.HttpsError("invalid-argument", "钱包地址不能为空");
+    }
+    if (!rewardType || !['top20', 'countdown'].includes(rewardType)) {
+      throw new functions.https.HttpsError("invalid-argument", "奖励类型无效，必须是 'top20' 或 'countdown'");
+    }
+    if (!roundId) {
+      throw new functions.https.HttpsError("invalid-argument", "轮次ID不能为空");
+    }
+    
+    let validationResult;
+    let rewardAmount;
+    
+    // 根据奖励类型进行验证
+    if (rewardType === 'top20') {
+      validationResult = await validateTop20HolderClaim(wallet, roundId);
+      rewardAmount = GAME_CONFIG.TOP20_REWARD_AMOUNT;
+    } else if (rewardType === 'countdown') {
+      validationResult = await validateLastCountdownClaim(wallet, roundId);
+      rewardAmount = GAME_CONFIG.LAST_COUNTDOWN_REWARD_AMOUNT;
+    }
+    
+    // 执行代币转账
+    const txHash = await transferTokens(wallet, rewardAmount);
+    
+    // 记录奖励领取
+    await recordRewardClaim(wallet, roundId, rewardType, rewardAmount, txHash);
+    
+    // 返回成功结果 - 确保是纯JSON对象
+    const result = {
+      success: true,
+      txHash: String(txHash || ''),
+      rewardType: String(rewardType || ''),
+      amount: Number(rewardAmount || 0),
+      roundId: String(roundId || ''),
+      message: String(rewardType === 'top20' ? 
+        `持仓前20持有者奖励领取成功！获得 ${rewardAmount} TOKENS` :
+        `最后倒计时奖励领取成功！获得 ${rewardAmount} TOKENS`)
+    };
+    
+    // 多层清理确保完全安全的返回值
+    console.log("claimGameReward原始返回数据:", result);
+    
+    // 第一层：数据清理
+    const sanitizedResult = sanitizeData(result);
+    console.log("claimGameReward清理后数据:", sanitizedResult);
+    
+    // 第二层：JSON 序列化清理
+    const jsonString = JSON.stringify(sanitizedResult);
+    const finalResult = JSON.parse(jsonString);
+    console.log("claimGameReward最终返回数据:", finalResult);
+    
+    // 第三层：确保返回的是纯对象
+    return Object.assign({}, finalResult);
+    
+  } catch (error) {
+    console.error("claimGameReward错误:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+});
+
+// 获取用户可领取的奖励列表
+exports.getUserClaimableRewards = functions.https.onCall(async (data, context) => {
+  try {
+    const { wallet } = data;
+    
+    if (!wallet) {
+      throw new functions.https.HttpsError("invalid-argument", "钱包地址不能为空");
+    }
+    
+    const claimableRewards = {
+      top20: [],
+      countdown: []
+    };
+    
+    // 获取持仓前20持有者奖励轮次
+    const top20RoundsRef = admin.database().ref('holderRewardRounds');
+    const top20RoundsSnap = await top20RoundsRef.once("value");
+    
+    if (top20RoundsSnap.exists()) {
+      const top20Rounds = top20RoundsSnap.val();
+      for (const [roundId, roundData] of Object.entries(top20Rounds)) {
+        if (roundData.top20Holders && roundData.top20Holders.some(holder => holder.address === wallet)) {
+          // 检查是否已领取
+          const claimedRef = admin.database().ref(`claimedRewards/top20/${roundId}/${wallet}`);
+          const claimedSnap = await claimedRef.once("value");
+          
+          if (!claimedSnap.exists()) {
+            claimableRewards.top20.push({
+              roundId: roundId,
+              timestamp: roundData.timestamp,
+              rewardAmount: GAME_CONFIG.TOP20_REWARD_AMOUNT
             });
-        });
-
-        // 链上实时获取持仓前20持有者
-        async function fetchTopHolders(tokenMint) {
-            const holdersList = document.getElementById('topHoldersList');
-            holdersList.innerHTML = '<li class="text-gray-400 italic">链上实时查询中...</li>';
-            try {
-                console.log('开始查询持仓榜，代币地址:', tokenMint);
-                if (!window.solanaTracker) {
-                    throw new Error('监控器未初始化');
-                }
-                // LP池子地址列表
-                const lpAddresses = [
-                    'WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh',
-                    // 未来可扩展更多池子
-                ];
-                // 1. 查找所有Token Account
-                const data = await window.solanaTracker.makeRpcCall('getProgramAccounts', [
-                    'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-                    {
-                        encoding: 'jsonParsed',
-                        filters: [
-                            { dataSize: 165 },
-                            { memcmp: { offset: 0, bytes: tokenMint } }
-                        ]
-                    }
-                ]);
-                console.log('RPC响应数据:', data);
-                if (!data || !Array.isArray(data) || data.length === 0) {
-                    holdersList.innerHTML = '<li class="text-yellow-400 text-xs">链上暂无持仓数据</li>';
-                    return;
-                }
-                // 2. 统计所有owner和余额，排除LP池子
-                const holders = {};
-                data.forEach(acc => {
-                    const owner = acc.account.data.parsed.info.owner;
-                    const amount = parseInt(acc.account.data.parsed.info.tokenAmount.amount);
-                    if (lpAddresses.includes(owner)) return; // 跳过池子
-                    if (!holders[owner]) holders[owner] = 0;
-                    holders[owner] += amount;
-                });
-                console.log('统计到的持有人:', holders);
-                // 3. 排序取前20
-                const sorted = Object.entries(holders)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 20);
-                console.log('排序后的前20:', sorted);
-                holdersList.innerHTML = '';
-                sorted.forEach(([owner, amount], idx) => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `
-                        <span class="text-memePink font-bold text-xs">#${idx + 1}</span>
-                        <a href="https://solscan.io/account/${owner}" target="_blank" class="text-blue-400 hover:underline mx-1">
-                            ${owner.substring(0, 6)}...${owner.substring(owner.length - 4)}
-                        </a>
-                        <span class="text-gray-400 text-xs">(${amount})</span>
-                    `;
-                    holdersList.appendChild(li);
-                });
-            } catch (e) {
-                console.error('链上查询失败，详细错误:', e);
-                holdersList.innerHTML = `<li class="text-red-400 text-xs">链上查询失败: ${e.message}</li>`;
-            }
+          }
         }
-
-        // 成功增加倒计时的地址列表
-        let successAddresses = [];
-        const maxSuccessAddresses = 5; // 最多显示5个地址
-
-        // 添加成功增加倒计时的地址
-        function addSuccessAddress(address, amount, timestamp) {
-            const addressInfo = {
-                address: address,
-                amount: amount,
-                timestamp: timestamp,
-                time: new Date().toLocaleTimeString()
-            };
-            
-            // 检查是否已存在该地址
-            const existingIndex = successAddresses.findIndex(item => item.address === address);
-            if (existingIndex !== -1) {
-                // 如果已存在，更新信息
-                successAddresses[existingIndex] = addressInfo;
-            } else {
-                // 如果不存在，添加到开头
-                successAddresses.unshift(addressInfo);
-                // 保持最多20个
-                if (successAddresses.length > maxSuccessAddresses) {
-                    successAddresses = successAddresses.slice(0, maxSuccessAddresses);
-                }
-            }
-            
-            updateSuccessAddressesDisplay();
-        }
-
-        // 更新成功地址显示
-        function updateSuccessAddressesDisplay() {
-            const addressesList = document.getElementById('successAddressesList');
-            if (successAddresses.length === 0) {
-                addressesList.innerHTML = '<li class="text-gray-400 text-sm italic">等待大额买入...</li>';
-                return;
-            }
-            
-            addressesList.innerHTML = '';
-            successAddresses.forEach((item, idx) => {
-                const li = document.createElement('li');
-                li.className = 'text-sm border-b border-gray-700 pb-2';
-                li.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div class="flex-1">
-                            <span class="text-memePink font-bold">#${idx + 1}</span>
-                            <a href="https://solscan.io/account/${item.address}" target="_blank" class="text-blue-400 hover:underline mx-2">
-                                ${item.address.substring(0, 6)}...${item.address.substring(item.address.length - 4)}
-                            </a>
-                        </div>
-                        <div class="text-right text-xs text-gray-400">
-                            <div>${item.amount}</div>
-                            <div>${item.time}</div>
-                        </div>
-                    </div>
-                `;
-                addressesList.appendChild(li);
+      }
+    }
+    
+    // 获取最后倒计时奖励轮次
+    const countdownRoundsRef = admin.database().ref('gameRounds');
+    const countdownRoundsSnap = await countdownRoundsRef.once("value");
+    
+    if (countdownRoundsSnap.exists()) {
+      const countdownRounds = countdownRoundsSnap.val();
+      for (const [roundId, roundData] of Object.entries(countdownRounds)) {
+        if (roundData.lastBigBuyAddress === wallet) {
+          // 检查是否已领取
+          const claimedRef = admin.database().ref(`claimedRewards/countdown/${roundId}/${wallet}`);
+          const claimedSnap = await claimedRef.once("value");
+          
+          if (!claimedSnap.exists()) {
+            claimableRewards.countdown.push({
+              roundId: roundId,
+              timestamp: roundData.timestamp,
+              rewardAmount: GAME_CONFIG.LAST_COUNTDOWN_REWARD_AMOUNT,
+              buyAmount: roundData.lastBigBuyAmount
             });
+          }
         }
+      }
+    }
+    
+    const result = {
+      success: true,
+      claimableRewards: claimableRewards,
+      totalTop20: Number(claimableRewards.top20.length || 0),
+      totalCountdown: Number(claimableRewards.countdown.length || 0)
+    };
+    
+    // 多层清理确保完全安全的返回值
+    console.log("getUserClaimableRewards原始返回数据:", result);
+    
+    // 第一层：数据清理
+    const sanitizedResult = sanitizeData(result);
+    console.log("getUserClaimableRewards清理后数据:", sanitizedResult);
+    
+    // 第二层：JSON 序列化清理
+    const jsonString = JSON.stringify(sanitizedResult);
+    const finalResult = JSON.parse(jsonString);
+    console.log("getUserClaimableRewards最终返回数据:", finalResult);
+    
+    // 第三层：确保返回的是纯对象
+    return Object.assign({}, finalResult);
+    
+  } catch (error) {
+    console.error("getUserClaimableRewards错误:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+});
 
-        // 自动刷新持仓前20持有者
-        let topHoldersInterval = null;
-        let topHoldersCountdown = 10;
-        let topHoldersCurrentMint = '';
+// 获取轮次详细信息
+exports.getRoundDetails = functions.https.onCall(async (data, context) => {
+  try {
+    const { roundId, rewardType } = data;
+    
+    if (!roundId || !rewardType) {
+      throw new functions.https.HttpsError("invalid-argument", "轮次ID和奖励类型不能为空");
+    }
+    
+    let roundData;
+    if (rewardType === 'top20') {
+      const roundRef = admin.database().ref(`holderRewardRounds/${roundId}`);
+      const roundSnap = await roundRef.once("value");
+      roundData = roundSnap.val();
+    } else if (rewardType === 'countdown') {
+      const roundRef = admin.database().ref(`gameRounds/${roundId}`);
+      const roundSnap = await roundRef.once("value");
+      roundData = roundSnap.val();
+    }
+    
+    if (!roundData) {
+      throw new functions.https.HttpsError("not-found", "轮次数据不存在");
+    }
+    
+    const result = {
+      success: true,
+      roundData: roundData
+    };
+    
+    // 多层清理确保完全安全的返回值
+    console.log("getRoundDetails原始返回数据:", result);
+    
+    // 第一层：数据清理
+    const sanitizedResult = sanitizeData(result);
+    console.log("getRoundDetails清理后数据:", sanitizedResult);
+    
+    // 第二层：JSON 序列化清理
+    const jsonString = JSON.stringify(sanitizedResult);
+    const finalResult = JSON.parse(jsonString);
+    console.log("getRoundDetails最终返回数据:", finalResult);
+    
+    // 第三层：确保返回的是纯对象
+    return Object.assign({}, finalResult);
+    
+  } catch (error) {
+    console.error("getRoundDetails错误:", error);
+    throw new functions.https.HttpsError("internal", error.message);
+  }
+});
 
-        // 刷新倒计时显示
-        function updateTopHoldersCountdown() {
-            const timer = document.getElementById('holdersRefreshCountdown');
-            if (timer) {
-                timer.textContent = topHoldersCountdown;
-            }
-        }
+// 保留原有的积分兑换函数（如果需要的话）
+exports.claimToken = functions.https.onCall(async (data, context) => {
+  // 兼容参数被包裹一层的情况
+  const wallet = data.wallet || (data.data && data.data.wallet);
+  console.log("claimToken收到的wallet:", wallet);
+  if (!wallet) {
+    throw new functions.https.HttpsError("invalid-argument", "钱包地址不能为空");
+  }
 
-        async function startTopHoldersAutoRefresh(tokenMint) {
-            console.log('启动持仓者自动刷新，代币地址:', tokenMint);
-            topHoldersCurrentMint = tokenMint;
-            topHoldersCountdown = 10;
-            updateTopHoldersCountdown();
-            if (topHoldersInterval) clearInterval(topHoldersInterval);
-            // 立即拉取一次
-            fetchTopHolders(tokenMint);
-            topHoldersInterval = setInterval(() => {
-                topHoldersCountdown--;
-                updateTopHoldersCountdown();
-                if (topHoldersCountdown <= 0) {
-                    fetchTopHolders(topHoldersCurrentMint);
-                    topHoldersCountdown = 10;
-                }
-            }, 1000);
-        }
+  // 读取用户积分（以钱包地址为主键）
+  const userRef = admin.database().ref(`users/${wallet}`);
+  const userSnap = await userRef.once("value");
+  const userData = userSnap.val();
+  const score = userData && userData.score ? parseInt(userData.score) : 0;
+  if (score <= 0) {
+    throw new functions.https.HttpsError("failed-precondition", "没有可兑换的积分");
+  }
 
-        function stopTopHoldersAutoRefresh() {
-            console.log('停止持仓者自动刷新');
-            if (topHoldersInterval) clearInterval(topHoldersInterval);
-            topHoldersInterval = null;
-        }
+  try {
+    const mint = new PublicKey(mintAddress);
+    const toWallet = new PublicKey(wallet);
 
-        // 监控功能已移至管理面板
-        // 游戏逻辑相关变量
-        let gameData = {
-            devHoldings: 3, // DEV持有3%筹码
-            triggerThreshold: 100000, // 触发阈值100000数量
-            countdownIncrement: 60, // 每次增加60秒
-            maxCountdown: 600, // 最大10分钟
-            lastBigBuyReward: 0.2, // 最后大额买入奖励0.2%
-            top20Reward: 0.5, // 前20名平分奖励0.5%
-            top20RewardInterval: 1200, // 20分钟 = 1200秒
-            
-            // 自动捕捉数据
-            top20Holders: [],
-            lastBigBuyAddress: null,
-            lastBigBuyAmount: 0,
-            countdownEnded: false,
-            lastRewardTime: 0,
-            
-            // 持仓奖励独立倒计时
-            holderRewardCountdown: 180, // 持仓奖励倒计时：3分钟（测试用）
-            holderRewardEnded: false, // 持仓奖励倒计时是否结束
-            holderRewardRounds: [] // 持仓奖励轮次历史
-        };
-        
-        // 奖励页面相关变量
-        let rewardData = {
-            top20Holders: [],
-            lastSuccessAddress: null,
-            lastSuccessAmount: 0,
-            countdownEnded: false
-        };
-        
-        // 从Firebase加载当前代币地址
-        async function loadTokenAddressFromFirebase() {
-            try {
-                const snapshot = await database.ref('currentTokenAddress').once('value');
-                if (snapshot.exists()) {
-                    const address = snapshot.val();
-                    // 更新代币地址输入框
-                    const tokenAddressInput = document.getElementById('tokenAddress');
-                    if (tokenAddressInput) {
-                        tokenAddressInput.value = address;
-                        // 如果游戏已经初始化，只更新代币地址，不自动启动监控
-                        if (window.solanaTracker) {
-                            window.solanaTracker.tokenAddress = address;
-                        }
-                        // 不自动启动持仓者刷新，等待管理面板指令
-                    }
-                    console.log('从Firebase加载代币地址:', address);
-                }
-            } catch (error) {
-                console.error('加载代币地址失败:', error);
-            }
-        }
-        
-        // 监听Firebase中代币地址的变化
-        function listenToTokenAddressChanges() {
-            database.ref('currentTokenAddress').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const address = snapshot.val();
-                    // 更新代币地址输入框
-                    const tokenAddressInput = document.getElementById('tokenAddress');
-                    if (tokenAddressInput) {
-                        tokenAddressInput.value = address;
-                        // 如果游戏已经初始化，只更新代币地址，不自动启动监控
-                        if (window.solanaTracker) {
-                            window.solanaTracker.tokenAddress = address;
-                        }
-                        // 不自动启动持仓者刷新，等待管理面板指令
-                    }
-                    console.log('Firebase代币地址已更新:', address);
-                }
-            });
-        }
-        
-        // 监听管理面板的控制指令
-        function listenToAdminControl() {
-            // 监听监控控制
-            database.ref('gameControl/monitoring').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const shouldMonitor = snapshot.val();
-                    if (window.solanaTracker) {
-                        if (shouldMonitor) {
-                            window.solanaTracker.startMonitoring();
-                            // 获取当前代币地址并启动持仓者刷新
-                            const currentAddress = document.getElementById('tokenAddress').value.trim();
-                            if (currentAddress) {
-                                startTopHoldersAutoRefresh(currentAddress);
-                            }
-                            console.log('管理面板指令：开始监控');
-                        } else {
-                            window.solanaTracker.stopMonitoring();
-                            // 停止持仓者刷新
-                            stopTopHoldersAutoRefresh();
-                            console.log('管理面板指令：停止监控');
-                        }
-                    }
-                }
-            });
-            
-            // 监听游戏暂停控制
-            database.ref('gameControl/paused').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const isPaused = snapshot.val();
-                    if (window.solanaTracker) {
-                        if (isPaused) {
-                            window.solanaTracker.pauseGame();
-                            console.log('管理面板指令：暂停游戏');
-                        } else {
-                            window.solanaTracker.resumeGame();
-                            console.log('管理面板指令：恢复游戏');
-                        }
-                    }
-                }
-            });
-            
-            // 监听倒计时重置
-            database.ref('gameControl/resetCountdown').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const timestamp = snapshot.val();
-                    if (window.solanaTracker) {
-                        // 重置倒计时到5分钟
-                        window.solanaTracker.countdownDate = new Date();
-                        window.solanaTracker.countdownDate.setMinutes(window.solanaTracker.countdownDate.getMinutes() + 5);
-                        window.solanaTracker.originalCountdownDate = new Date(window.solanaTracker.countdownDate);
-                        window.solanaTracker.totalTimeAdjustment = 0;
-                        window.solanaTracker.transactionCount = 0;
-                        window.solanaTracker.updateCountdown();
-                        console.log('管理面板指令：重置倒计时');
-                    }
-                }
-            });
-            
-            // 监听强制快照
-            database.ref('gameControl/forceSnapshot').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const timestamp = snapshot.val();
-                    if (window.solanaTracker) {
-                        // 强制执行持仓快照
-                        window.solanaTracker.onHolderRewardEnded();
-                        console.log('管理面板指令：强制快照');
-                    }
-                }
-            });
-            
-            // 监听模拟交易
-            database.ref('gameControl/simulateTransaction').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const mockTx = snapshot.val();
-                    if (window.solanaTracker) {
-                        // 处理模拟交易
-                        window.solanaTracker.processTransaction(mockTx);
-                        console.log('管理面板指令：模拟交易', mockTx);
-                    }
-                }
-            });
-            
-            // 监听倒计时归零
-            database.ref('gameControl/endCountdown').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const timestamp = snapshot.val();
-                    if (window.solanaTracker) {
-                        // 立即将倒计时设置为0（用于测试）
-                        window.solanaTracker.countdownDate = new Date();
-                        gameData.countdownEnded = false;
-                        window.solanaTracker.updateCountdown();
-                        console.log('管理面板指令：倒计时归零');
-                    }
-                }
-            });
-        }
+    // 获取或创建用户的ATA
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer,
+      mint,
+      toWallet
+    );
 
-        // 显示奖励页面
-        async function showRewardPage() {
-            const rewardPage = document.getElementById('rewardPage');
-            if (rewardPage) {
-                rewardPage.classList.remove('hidden');
-                
-                // 测试Firebase Functions连接
-                await testFirebaseFunctions();
-                
-                await updateRewardPageData(); // 更新奖励数据
-                loadHolderRewardRoundsList(); // 加载持仓奖励历史
-                loadCountdownRewardRoundsList(); // 加载倒计时奖励历史
-            }
-        }
-        
-        // 测试Firebase Functions连接
-        async function testFirebaseFunctions() {
-            try {
-                console.log('Firebase Functions对象:', functions);
-                
-                // 尝试获取函数列表（如果可用）
-                if (functions && typeof functions.httpsCallable === 'function') {
-                    console.log('✅ Firebase Functions可用');
-                    
-                    // 测试一个简单的函数调用
-                    try {
-                        const testFunction = functions.httpsCallable('getRoundDetails');
-                        const testResult = await testFunction({
-                            roundId: 'test',
-                            rewardType: 'top20'
-                        });
-                        console.log('✅ 测试函数调用成功');
-                    } catch (testError) {
-                        console.log('⚠️ 测试函数调用失败（预期行为）:', testError.message);
-                    }
-                } else {
-                    console.error('❌ Firebase Functions不可用');
-                }
-            } catch (error) {
-                console.error('Firebase Functions测试失败:', error);
-            }
-        }
+    // 获取 payer 的ATA
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer,
+      mint,
+      payer.publicKey
+    );
 
-        // 隐藏奖励页面
-        function hideRewardPage() {
-            const rewardPage = document.getElementById('rewardPage');
-            if (rewardPage) {
-                rewardPage.classList.add('hidden');
-            }
-        }
+    // 转账
+    // 1积分=10,000,000最小单位（比例再提高10倍，假设decimals=7）
+    const decimals = 7;
+    const amount = score * Math.pow(10, decimals);
+    const sig = await transfer(
+      connection,
+      payer,
+      fromTokenAccount.address,
+      toTokenAccount.address,
+      payer,
+      amount // 1积分=1个token（6位小数）
+    );
 
-        // 更新奖励页面数据
-        async function updateRewardPageData() {
-            // 检查钱包连接状态
-            if (!window.walletManager || !window.walletManager.isConnected) {
-                document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 请先连接钱包</span>';
-                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 请先连接钱包</span>';
-                document.getElementById('claimTop20Btn').disabled = true;
-                document.getElementById('claimLastSuccessBtn').disabled = true;
-                return;
-            }
-            
-            // 直接启用按钮，让用户尝试领取
-            document.getElementById('claimTop20Btn').disabled = false;
-            document.getElementById('claimLastSuccessBtn').disabled = false;
-            
-            // 设置默认显示信息
-            document.getElementById('top20Status').innerHTML = '<span class="text-blue-400">💡 点击按钮尝试领取奖励</span>';
-            document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-blue-400">💡 点击按钮尝试领取奖励</span>';
-            
-            // 设置默认奖励数量显示
-            document.getElementById('top20Reward').textContent = '30000 TOKENS';
-            document.getElementById('lastSuccessReward').textContent = '100000 TOKENS';
-        }
+    // 积分清零
+    await userRef.update({
+      score: 0,
+      lastClaimed: Date.now(),
+      lastTx: sig
+    });
 
-        // 验证地址功能
-        function verifyAddress(address) {
-            if (!address || address.trim() === '') {
-                return { valid: false, message: '请输入有效的钱包地址' };
-            }
-            
-            // 简单的Solana地址格式验证
-            const solanaAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-            if (!solanaAddressRegex.test(address.trim())) {
-                return { valid: false, message: '地址格式不正确' };
-            }
-            
-            console.log('验证地址:', address.trim());
-            console.log('当前持仓前20数据:', gameData.top20Holders);
-            console.log('奖励数据中的持仓前20:', rewardData.top20Holders);
-            
-            // 优先使用实时的持仓数据，如果没有则使用奖励数据
-            const holdersToCheck = gameData.top20Holders.length > 0 ? gameData.top20Holders : rewardData.top20Holders;
-            
-            // 检查是否在持仓前20持有者中
-            const isTop20 = holdersToCheck.some(holder => holder.address === address.trim());
-            console.log('是否在持仓前20中:', isTop20);
-            
-            if (isTop20) {
-                return { valid: true, message: '✅ 该地址在持仓前20持有者中，可领取奖励！', type: 'top20' };
-            }
-            
-            // 检查是否是最后成功地址
-            const lastSuccessAddress = gameData.lastBigBuyAddress || rewardData.lastSuccessAddress;
-            console.log('最后成功地址:', lastSuccessAddress);
-            
-            if (lastSuccessAddress === address.trim()) {
-                return { valid: true, message: '✅ 该地址是最后倒计时地址，可领取奖励！', type: 'lastSuccess' };
-            }
-            
-            return { valid: false, message: '❌ 该地址不符合领取条件' };
-        }
-
-        // 领取前20名奖励
-        async function claimTop20Reward() {
-            console.log('=== claimTop20Reward 开始调试 ===');
-            console.log('window.walletManager:', !!window.walletManager);
-            console.log('window.walletManager.isConnected:', window.walletManager?.isConnected);
-            console.log('window.walletManager.currentWallet:', window.walletManager?.currentWallet);
-            
-            // 添加明显的调试信息
-            alert(`调试信息：
-钱包管理器存在: ${!!window.walletManager}
-钱包已连接: ${window.walletManager?.isConnected}
-当前钱包: ${window.walletManager?.currentWallet}`);
-            
-            if (!window.walletManager || !window.walletManager.isConnected) {
-                alert('请先连接钱包');
-                return;
-            }
-            
-            // 正确提取钱包地址 - currentWallet是对象，需要获取其中的地址
-            let walletAddress = '';
-            const walletObj = window.walletManager.currentWallet;
-            
-            console.log('钱包对象详情:', walletObj);
-            console.log('钱包对象类型:', typeof walletObj);
-            
-            // 尝试多种可能的属性名来获取地址
-            if (walletObj && typeof walletObj === 'object') {
-                walletAddress = walletObj.address || 
-                               walletObj.publicKey || 
-                               walletObj.toString() || 
-                               (walletObj.toBase58 && walletObj.toBase58()) ||
-                               '';
-            } else {
-                walletAddress = String(walletObj || '');
-            }
-            
-            walletAddress = String(walletAddress).trim();
-            console.log('提取到的钱包地址:', walletAddress);
-            
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
-                alert(`钱包地址提取失败！
-钱包对象: ${JSON.stringify(walletObj)}
-请检查wallet-connect.js中的钱包地址存储方式`);
-                return;
-            }
-            
-            try {
-                console.log('window.solanaTracker存在:', !!window.solanaTracker);
-                console.log('window.solanaTracker完整对象:', window.solanaTracker);
-                
-                // 获取当前轮次ID（使用最新的持仓奖励轮次）
-                let currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
-                console.log('原始轮次ID:', currentRoundId, '类型:', typeof currentRoundId);
-                
-                // 确保轮次ID是字符串类型
-                currentRoundId = String(currentRoundId || '').trim();
-                console.log('处理后轮次ID:', currentRoundId);
-                
-                console.log('调试 - 持仓奖励轮次ID:', currentRoundId);
-                console.log('调试 - solanaTracker状态:', {
-                    exists: !!window.solanaTracker,
-                    currentRoundId: window.solanaTracker?.currentRoundId,
-                    currentHolderRewardRoundId: window.solanaTracker?.currentHolderRewardRoundId,
-                    isMonitoring: window.solanaTracker?.isMonitoring
-                });
-                
-                // 如果轮次ID无效，尝试生成一个临时ID用于测试
-                if (!currentRoundId || currentRoundId === 'null' || currentRoundId === 'undefined') {
-                    console.warn('轮次ID无效，生成临时ID用于测试');
-                    currentRoundId = 'temp-' + Date.now();
-                    console.log('临时轮次ID:', currentRoundId);
-                }
-                
-                // 确保所有参数都是安全的字符串
-                const requestData = {
-                    wallet: walletAddress,
-                    rewardType: 'top20',
-                    roundId: currentRoundId
-                };
-                
-                // 验证所有参数都不是undefined
-                console.log('=== 参数验证 ===');
-                console.log('wallet:', requestData.wallet, '类型:', typeof requestData.wallet);
-                console.log('rewardType:', requestData.rewardType, '类型:', typeof requestData.rewardType);
-                console.log('roundId:', requestData.roundId, '类型:', typeof requestData.roundId);
-                
-                // 最终检查，确保没有undefined值
-                Object.keys(requestData).forEach(key => {
-                    if (requestData[key] === undefined || requestData[key] === 'undefined') {
-                        console.error(`参数 ${key} 是undefined，将使用默认值`);
-                        if (key === 'wallet') requestData[key] = 'test-wallet';
-                        if (key === 'rewardType') requestData[key] = 'top20';
-                        if (key === 'roundId') requestData[key] = 'test-round-' + Date.now();
-                    }
-                });
-                
-                console.log('=== 最终调用前调试 ===');
-                console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
-                console.log('参数详细检查:');
-                console.log('  - wallet:', `"${requestData.wallet}"`, '长度:', requestData.wallet?.length, '类型:', typeof requestData.wallet);
-                console.log('  - rewardType:', `"${requestData.rewardType}"`, '类型:', typeof requestData.rewardType);
-                console.log('  - roundId:', `"${requestData.roundId}"`, '类型:', typeof requestData.roundId);
-                console.log('使用的functions实例:', !!functions);
-                console.log('functions实例类型:', typeof functions);
-                
-                // 验证没有空值
-                Object.keys(requestData).forEach(key => {
-                    if (!requestData[key] || requestData[key] === '' || requestData[key] === 'undefined') {
-                        console.error(`❌ 参数 ${key} 为空或无效:`, requestData[key]);
-                    } else {
-                        console.log(`✅ 参数 ${key} 有效:`, requestData[key]);
-                    }
-                });
-                
-                // 临时强制设置钱包地址进行测试
-                if (!requestData.wallet || requestData.wallet === '' || requestData.wallet.length < 40) {
-                    console.warn('⚠️ 钱包地址无效，使用测试地址');
-                    console.warn('原地址:', requestData.wallet, '长度:', requestData.wallet?.length);
-                    requestData.wallet = '6btAW2SbJQKtwKRebiUuXA2fPv7MAVYJD1tgCvBx6GB5'; // 临时测试地址
-                    console.warn('新地址:', requestData.wallet, '长度:', requestData.wallet.length);
-                }
-                
-                console.log('最终发送的参数:', requestData);
-                
-                // 添加最终参数的明显提示
-                alert(`使用Firebase SDK调用Callable Function：
-钱包地址: ${requestData.wallet}
-地址长度: ${requestData.wallet?.length}
-奖励类型: ${requestData.rewardType}
-轮次ID: ${requestData.roundId}
-
-使用region: us-central1
-请查看控制台获取详细调试信息`);
-                
-                // 使用Firebase Functions SDK调用Callable Function（使用指定region的实例）
-                // 注意：Callable Functions要求参数必须是单个对象，不需要再包装在data中
-                console.log('调用前最终检查 - requestData:', JSON.stringify(requestData, null, 2));
-                
-                // 强制显示调试信息
-                const testParams = {
-                    wallet: '6btAW2SbJQKtwKRebiUuXA2fPv7MAVYJD1tgCvBx6GB5',
-                    rewardType: 'top20',
-                    roundId: 'test-123'
-                };
-                
-                alert(`🔍 调试信息：
-                
-测试参数:
-- wallet: ${testParams.wallet}
-- rewardType: ${testParams.rewardType}  
-- roundId: ${testParams.roundId}
-
-functions对象存在: ${!!functions}
-functions类型: ${typeof functions}
-
-即将调用Firebase Function...`);
-                
-                console.log('=== 强制调试信息 ===');
-                console.log('testParams:', testParams);
-                console.log('functions对象:', functions);
-                
-                const claimGameReward = functions.httpsCallable('claimGameReward');
-                console.log('claimGameReward创建成功:', !!claimGameReward);
-                
-                // 先尝试简化的测试参数
-                alert('正在调用Firebase Function...');
-                const result = await claimGameReward(testParams);
-                alert('Firebase Function调用完成，查看控制台结果');
-                console.log('Firebase Function调用结果:', result);
-                
-                // Callable Function直接返回结果，不需要检查response.ok
-                console.log('Callable Function返回结果:', result);
-                
-                if (result.data.success) {
-                    alert(`🏆 持仓前20持有者奖励领取成功！\n获得 ${result.data.amount} TOKENS\n交易哈希: ${result.data.txHash}`);
-                    
-                    // 禁用按钮并更新状态
-                    document.getElementById('claimTop20Btn').disabled = true;
-                    document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">✅ 已领取</span>';
-                    
-                    // 刷新历史获奖轮次列表
-                    loadHolderRewardRoundsList();
-                } else {
-                    alert('奖励领取失败: ' + result.data.message);
-                }
-            } catch (error) {
-                console.error('领取奖励失败:', error);
-                console.error('错误详情:', {
-                    message: error.message,
-                    code: error.code,
-                    details: error.details,
-                    stack: error.stack
-                });
-                
-                // 根据错误信息显示不同的提示
-                if (error.message && error.message.includes('不在持仓前20持有者中')) {
-                    alert('❌ 您的地址不在持仓前20持有者中，无法领取此奖励');
-                } else if (error.message && error.message.includes('已领取')) {
-                    alert('❌ 该轮次奖励已领取，无法重复领取');
-                } else if (error.message && error.message.includes('轮次数据不存在')) {
-                    alert('❌ 轮次数据不存在，请等待游戏数据更新');
-                } else if (error.code === 'functions/unavailable') {
-                    alert('❌ Firebase Functions未部署或不可用，请联系管理员');
-                } else if (error.message && error.message.includes('hasOwnProperty')) {
-                    alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
-                } else if (error.message && error.message.includes('HTTP 500')) {
-                    alert('❌ 服务器内部错误：\n• Firebase Functions可能未正确部署\n• 检查云函数日志获取详细信息\n• 联系管理员检查后端服务');
-                } else if (error.message && error.message.includes('HTTP 404')) {
-                    alert('❌ 云函数未找到：\n• claimGameReward函数可能未部署\n• 检查函数名称和地区设置');
-                } else if (error.message && error.message.includes('HTTP 403')) {
-                    alert('❌ 权限被拒绝：\n• 检查Firebase安全规则\n• 确认函数访问权限设置');
-                } else {
-                    alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
-                }
-            }
-        }
-
-        // 领取最后倒计时奖励
-        async function claimLastSuccessReward() {
-            console.log('=== claimLastSuccessReward 开始调试 ===');
-            console.log('window.walletManager:', !!window.walletManager);
-            console.log('window.walletManager.isConnected:', window.walletManager?.isConnected);
-            console.log('window.walletManager.currentWallet:', window.walletManager?.currentWallet);
-            
-            if (!window.walletManager || !window.walletManager.isConnected) {
-                alert('请先连接钱包');
-                return;
-            }
-            
-            // 正确提取钱包地址 - currentWallet是对象，需要获取其中的地址
-            let walletAddress = '';
-            const walletObj = window.walletManager.currentWallet;
-            
-            console.log('钱包对象详情:', walletObj);
-            console.log('钱包对象类型:', typeof walletObj);
-            
-            // 尝试多种可能的属性名来获取地址
-            if (walletObj && typeof walletObj === 'object') {
-                walletAddress = walletObj.address || 
-                               walletObj.publicKey || 
-                               walletObj.toString() || 
-                               (walletObj.toBase58 && walletObj.toBase58()) ||
-                               '';
-            } else {
-                walletAddress = String(walletObj || '');
-            }
-            
-            walletAddress = String(walletAddress).trim();
-            console.log('提取到的钱包地址:', walletAddress);
-            
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
-                alert(`钱包地址提取失败！
-钱包对象: ${JSON.stringify(walletObj)}
-请检查wallet-connect.js中的钱包地址存储方式`);
-                return;
-            }
-            
-            try {
-                console.log('window.solanaTracker存在:', !!window.solanaTracker);
-                
-                // 获取当前轮次ID（使用最新的倒计时奖励轮次）
-                let currentRoundId = window.solanaTracker ? window.solanaTracker.currentRoundId : null;
-                console.log('原始轮次ID:', currentRoundId, '类型:', typeof currentRoundId);
-                
-                // 确保轮次ID是字符串类型
-                currentRoundId = String(currentRoundId || '').trim();
-                console.log('处理后轮次ID:', currentRoundId);
-                
-                console.log('调试 - 倒计时奖励轮次ID:', currentRoundId);
-                console.log('调试 - solanaTracker状态:', {
-                    exists: !!window.solanaTracker,
-                    currentRoundId: window.solanaTracker?.currentRoundId,
-                    currentHolderRewardRoundId: window.solanaTracker?.currentHolderRewardRoundId,
-                    isMonitoring: window.solanaTracker?.isMonitoring
-                });
-                
-                // 如果轮次ID无效，尝试生成一个临时ID用于测试
-                if (!currentRoundId || currentRoundId === 'null' || currentRoundId === 'undefined') {
-                    console.warn('轮次ID无效，生成临时ID用于测试');
-                    currentRoundId = 'temp-countdown-' + Date.now();
-                    console.log('临时轮次ID:', currentRoundId);
-                }
-                
-                // 确保所有参数都是安全的字符串
-                const requestData = {
-                    wallet: walletAddress,
-                    rewardType: 'countdown',
-                    roundId: currentRoundId
-                };
-                
-                // 验证所有参数都不是undefined
-                console.log('=== 参数验证 ===');
-                console.log('wallet:', requestData.wallet, '类型:', typeof requestData.wallet);
-                console.log('rewardType:', requestData.rewardType, '类型:', typeof requestData.rewardType);
-                console.log('roundId:', requestData.roundId, '类型:', typeof requestData.roundId);
-                
-                // 最终检查，确保没有undefined值
-                Object.keys(requestData).forEach(key => {
-                    if (requestData[key] === undefined || requestData[key] === 'undefined') {
-                        console.error(`参数 ${key} 是undefined，将使用默认值`);
-                        if (key === 'wallet') requestData[key] = 'test-wallet';
-                        if (key === 'rewardType') requestData[key] = 'countdown';
-                        if (key === 'roundId') requestData[key] = 'test-countdown-' + Date.now();
-                    }
-                });
-                
-                console.log('=== claimLastSuccessReward最终调用前调试 ===');
-                console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
-                console.log('调用前最终检查 - requestData:', JSON.stringify(requestData, null, 2));
-                
-                // 使用Firebase Functions SDK调用Callable Function（使用指定region的实例）
-                const claimGameReward = functions.httpsCallable('claimGameReward');
-                console.log('开始调用Firebase Function...');
-                const result = await claimGameReward(requestData);
-                console.log('Firebase Function调用结果:', result);
-                
-                // Callable Function直接返回结果
-                console.log('Callable Function返回结果:', result);
-                
-                if (result.data.success) {
-                    alert(`💰 最后倒计时奖励领取成功！\n获得 ${result.data.amount} TOKENS\n交易哈希: ${result.data.txHash}`);
-                    
-                    // 禁用按钮并更新状态
-                    document.getElementById('claimLastSuccessBtn').disabled = true;
-                    document.getElementById('claimLastSuccessBtn').innerHTML = '<span class="text-white">✅ 已领取</span>';
-                    
-                    // 刷新历史获奖轮次列表
-                    loadCountdownRewardRoundsList();
-                } else {
-                    alert('奖励领取失败: ' + result.data.message);
-                }
-            } catch (error) {
-                console.error('领取奖励失败:', error);
-                console.error('错误详情:', {
-                    message: error.message,
-                    code: error.code,
-                    details: error.details,
-                    stack: error.stack
-                });
-                
-                // 根据错误信息显示不同的提示
-                if (error.message && error.message.includes('不是最后倒计时地址')) {
-                    alert('❌ 您的地址不是最后倒计时地址，无法领取此奖励');
-                } else if (error.message && error.message.includes('已领取')) {
-                    alert('❌ 该轮次奖励已领取，无法重复领取');
-                } else if (error.message && error.message.includes('轮次数据不存在')) {
-                    alert('❌ 轮次数据不存在，请等待游戏数据更新');
-                } else if (error.code === 'functions/unavailable') {
-                    alert('❌ Firebase Functions未部署或不可用，请联系管理员');
-                } else if (error.message && error.message.includes('hasOwnProperty')) {
-                    alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
-                } else if (error.message && error.message.includes('HTTP 500')) {
-                    alert('❌ 服务器内部错误：\n• Firebase Functions可能未正确部署\n• 检查云函数日志获取详细信息\n• 联系管理员检查后端服务');
-                } else if (error.message && error.message.includes('HTTP 404')) {
-                    alert('❌ 云函数未找到：\n• claimGameReward函数可能未部署\n• 检查函数名称和地区设置');
-                } else if (error.message && error.message.includes('HTTP 403')) {
-                    alert('❌ 权限被拒绝：\n• 检查Firebase安全规则\n• 确认函数访问权限设置');
-                } else {
-                    alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
-                }
-            }
-        }
-        
-        // 加载持仓奖励历史轮次列表
-        function loadHolderRewardRoundsList() {
-            const holderRewardRoundsList = document.getElementById('holderRewardRoundsList');
-            if (!holderRewardRoundsList) return;
-            
-            holderRewardRoundsList.innerHTML = '<div class="text-center text-gray-400">加载中...</div>';
-            
-            if (window.solanaTracker) {
-                window.solanaTracker.getAllHolderRewardRounds()
-                    .then((rounds) => {
-                        if (rounds.length === 0) {
-                            holderRewardRoundsList.innerHTML = '<div class="text-center text-gray-400">暂无持仓奖励历史</div>';
-                            return;
-                        }
-                        
-                        let html = '';
-                        rounds.forEach((round, index) => {
-                            const roundDate = new Date(round.timestamp).toLocaleString('zh-CN');
-                            const isClaimed = round.isClaimed ? '✅ 已领取' : '⏳ 待领取';
-                            const claimedDate = round.claimedAt ? new Date(round.claimedAt).toLocaleString('zh-CN') : '';
-                            
-                            html += `
-                                <div class="border-b border-gray-500 pb-3 mb-3 ${index === 0 ? 'border-t border-gray-500 pt-3' : ''}">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div class="font-bold text-memeYellow">持仓轮次 ${round.roundId}</div>
-                                        <div class="text-xs text-gray-400">${roundDate}</div>
-                                    </div>
-                                    
-                                    <div class="text-xs text-gray-300 space-y-1 mb-2">
-                                        <div>• 前20持有者数量：${round.top20Holders ? round.top20Holders.length : 0} 个地址</div>
-                                        <div>• 领取状态：${isClaimed}</div>
-                                        ${claimedDate ? `<div>• 领取时间：${claimedDate}</div>` : ''}
-                                    </div>
-                                    
-                                    <div class="text-xs text-gray-400">
-                                        <div>• 代币地址：${round.tokenAddress ? round.tokenAddress.substring(0, 6) + '...' + round.tokenAddress.substring(round.tokenAddress.length - 4) : '未知'}</div>
-                                        <div>• 奖励类型：持仓前20持有者奖励</div>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                        
-                        holderRewardRoundsList.innerHTML = html;
-                    })
-                    .catch((error) => {
-                        console.error('加载持仓奖励历史失败:', error);
-                        holderRewardRoundsList.innerHTML = '<div class="text-center text-red-400">加载失败，请重试</div>';
-                    });
-            } else {
-                holderRewardRoundsList.innerHTML = '<div class="text-center text-red-400">系统未初始化</div>';
-            }
-        }
-        
-        // 加载倒计时奖励历史轮次列表
-        function loadCountdownRewardRoundsList() {
-            const countdownRewardRoundsList = document.getElementById('countdownRewardRoundsList');
-            if (!countdownRewardRoundsList) return;
-            
-            countdownRewardRoundsList.innerHTML = '<div class="text-center text-gray-400">加载中...</div>';
-            
-            if (window.solanaTracker) {
-                window.solanaTracker.getAllWinnerRounds()
-                    .then((rounds) => {
-                        if (rounds.length === 0) {
-                            countdownRewardRoundsList.innerHTML = '<div class="text-center text-gray-400">暂无倒计时奖励历史</div>';
-                            return;
-                        }
-                        
-                        let html = '';
-                        rounds.forEach((round, index) => {
-                            const roundDate = new Date(round.timestamp).toLocaleString('zh-CN');
-                            const isClaimed = round.isClaimed ? '✅ 已领取' : '⏳ 待领取';
-                            const claimedDate = round.claimedAt ? new Date(round.claimedAt).toLocaleString('zh-CN') : '';
-                            
-                            html += `
-                                <div class="border-b border-gray-500 pb-3 mb-3 ${index === 0 ? 'border-t border-gray-500 pt-3' : ''}">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div class="font-bold text-memeYellow">倒计时轮次 ${round.roundId}</div>
-                                        <div class="text-xs text-gray-400">${roundDate}</div>
-                                    </div>
-                                    
-                                    <div class="text-xs text-gray-300 space-y-1 mb-2">
-                                        <div>• 最后大额买入地址：${round.lastBigBuyAddress ? round.lastBigBuyAddress.substring(0, 6) + '...' + round.lastBigBuyAddress.substring(round.lastBigBuyAddress.length - 4) : '无'}</div>
-                                        <div>• 买入数量：${round.lastBigBuyAmount ? round.lastBigBuyAmount.toLocaleString() : '0'}</div>
-                                        <div>• 领取状态：${isClaimed}</div>
-                                        ${claimedDate ? `<div>• 领取时间：${claimedDate}</div>` : ''}
-                                    </div>
-                                    
-                                    <div class="text-xs text-gray-400">
-                                        <div>• 代币地址：${round.tokenAddress ? round.tokenAddress.substring(0, 6) + '...' + round.tokenAddress.substring(round.tokenAddress.length - 4) : '未知'}</div>
-                                        <div>• 总交易次数：${round.transactionCount || 0}</div>
-                                        <div>• 倒计时调整：+${round.totalTimeAdjustment || 0} 秒</div>
-                                        <div>• 奖励类型：最后倒计时奖励</div>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                        
-                        countdownRewardRoundsList.innerHTML = html;
-                    })
-                    .catch((error) => {
-                        console.error('加载倒计时奖励历史失败:', error);
-                        countdownRewardRoundsList.innerHTML = '<div class="text-center text-red-400">加载失败，请重试</div>';
-                    });
-            } else {
-                countdownRewardRoundsList.innerHTML = '<div class="text-center text-red-400">系统未初始化</div>';
-            }
-        }
-
-        // 监控功能已移至管理面板
-
-        // 监听奖励页面按钮事件
-        document.addEventListener('DOMContentLoaded', function() {
-            // 领取奖励按钮点击事件
-            document.getElementById('claimRewardBtn').addEventListener('click', showRewardPage);
-            
-            // 前20%奖励按钮
-            document.getElementById('claimTop20Btn').addEventListener('click', claimTop20Reward);
-            
-            // 最后倒计时奖励按钮
-            document.getElementById('claimLastSuccessBtn').addEventListener('click', claimLastSuccessReward);
-            
-            // 验证地址按钮
-            document.getElementById('verifyAddressBtn').addEventListener('click', function() {
-                const address = document.getElementById('verifyAddressInput').value.trim();
-                const result = verifyAddress(address);
-                const resultDiv = document.getElementById('verifyResult');
-                
-                if (result.valid) {
-                    resultDiv.innerHTML = `<span class="text-green-400">${result.message}</span>`;
-                } else {
-                    resultDiv.innerHTML = `<span class="text-red-400">${result.message}</span>`;
-                }
-            });
-        });
-    </script>
-</body>
-</html>
+    const result = { 
+      success: true, 
+      tx: String(sig || '') 
+    };
+    
+    // 多层清理确保完全安全的返回值
+    console.log("claimToken原始返回数据:", result);
+    
+    // 第一层：数据清理
+    const sanitizedResult = sanitizeData(result);
+    console.log("claimToken清理后数据:", sanitizedResult);
+    
+    // 第二层：JSON 序列化清理
+    const jsonString = JSON.stringify(sanitizedResult);
+    const finalResult = JSON.parse(jsonString);
+    console.log("claimToken最终返回数据:", finalResult);
+    
+    // 第三层：确保返回的是纯对象
+    return Object.assign({}, finalResult);
+  } catch (e) {
+    throw new functions.https.HttpsError("internal", "发币失败: " + e.message);
+  }
+}); 
