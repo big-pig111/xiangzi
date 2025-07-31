@@ -2357,10 +2357,30 @@
             }
             
             // 获取钱包地址 - 使用标准化的方法
-            const walletAddress = window.walletManager.getWalletAddress();
+            let walletAddress = null;
+            
+            // 如果getWalletAddress方法不存在，使用备用方法
+            if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                walletAddress = window.walletManager.getWalletAddress();
+            } else {
+                // 备用方法
+                const walletObj = window.walletManager?.currentWallet;
+                if (walletObj && typeof walletObj === 'object') {
+                    walletAddress = walletObj.address || 
+                                   walletObj.publicKey || 
+                                   (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                   (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                   walletObj.toString() || 
+                                   '';
+                    walletAddress = String(walletAddress).trim();
+                } else {
+                    walletAddress = String(walletObj || '').trim();
+                }
+            }
+            
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress) {
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
                 document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 钱包地址无效</span>';
                 document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 钱包地址无效</span>';
                 document.getElementById('claimTop20Btn').disabled = true;
@@ -2564,10 +2584,30 @@
             }
             
             // 正确提取钱包地址
-            const walletAddress = window.walletManager.getWalletAddress();
+            let walletAddress = null;
+            
+            // 如果getWalletAddress方法不存在，使用备用方法
+            if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                walletAddress = window.walletManager.getWalletAddress();
+            } else {
+                // 备用方法
+                const walletObj = window.walletManager?.currentWallet;
+                if (walletObj && typeof walletObj === 'object') {
+                    walletAddress = walletObj.address || 
+                                   walletObj.publicKey || 
+                                   (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                   (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                   walletObj.toString() || 
+                                   '';
+                    walletAddress = String(walletAddress).trim();
+                } else {
+                    walletAddress = String(walletObj || '').trim();
+                }
+            }
+            
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress) {
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
                 alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
@@ -2637,10 +2677,30 @@
             }
             
             // 正确提取钱包地址
-            const walletAddress = window.walletManager.getWalletAddress();
+            let walletAddress = null;
+            
+            // 如果getWalletAddress方法不存在，使用备用方法
+            if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                walletAddress = window.walletManager.getWalletAddress();
+            } else {
+                // 备用方法
+                const walletObj = window.walletManager?.currentWallet;
+                if (walletObj && typeof walletObj === 'object') {
+                    walletAddress = walletObj.address || 
+                                   walletObj.publicKey || 
+                                   (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                   (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                   walletObj.toString() || 
+                                   '';
+                    walletAddress = String(walletAddress).trim();
+                } else {
+                    walletAddress = String(walletObj || '').trim();
+                }
+            }
+            
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress) {
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
                 alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
@@ -3087,10 +3147,30 @@
             }
             
             // 正确提取钱包地址
-            const walletAddress = window.walletManager.getWalletAddress();
+            let walletAddress = null;
+            
+            // 如果getWalletAddress方法不存在，使用备用方法
+            if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                walletAddress = window.walletManager.getWalletAddress();
+            } else {
+                // 备用方法
+                const walletObj = window.walletManager?.currentWallet;
+                if (walletObj && typeof walletObj === 'object') {
+                    walletAddress = walletObj.address || 
+                                   walletObj.publicKey || 
+                                   (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                   (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                   walletObj.toString() || 
+                                   '';
+                    walletAddress = String(walletAddress).trim();
+                } else {
+                    walletAddress = String(walletObj || '').trim();
+                }
+            }
+            
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress) {
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
                 alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
@@ -3141,9 +3221,28 @@
             if (!window.walletManager || !window.walletManager.isConnected) return;
             
             try {
-                const walletAddress = window.walletManager.getWalletAddress();
+                let walletAddress = null;
                 
-                if (!walletAddress) return;
+                // 如果getWalletAddress方法不存在，使用备用方法
+                if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                    walletAddress = window.walletManager.getWalletAddress();
+                } else {
+                    // 备用方法
+                    const walletObj = window.walletManager?.currentWallet;
+                    if (walletObj && typeof walletObj === 'object') {
+                        walletAddress = walletObj.address || 
+                                       walletObj.publicKey || 
+                                       (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                       (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                       walletObj.toString() || 
+                                       '';
+                        walletAddress = String(walletAddress).trim();
+                    } else {
+                        walletAddress = String(walletObj || '').trim();
+                    }
+                }
+                
+                if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') return;
                 
                 const userRef = firebase.database().ref(`users/${walletAddress}`);
                 const userSnap = await userRef.once('value');
@@ -3189,9 +3288,28 @@
                 
                 try {
                     // 获取当前连接的钱包地址
-                    let walletAddress = window.walletManager?.getWalletAddress();
+                    let walletAddress = null;
                     
-                    if (!walletAddress) {
+                    // 如果getWalletAddress方法不存在，使用备用方法
+                    if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                        walletAddress = window.walletManager.getWalletAddress();
+                    } else {
+                        // 备用方法
+                        const walletObj = window.walletManager?.currentWallet;
+                        if (walletObj && typeof walletObj === 'object') {
+                            walletAddress = walletObj.address || 
+                                           walletObj.publicKey || 
+                                           (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                           (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                           walletObj.toString() || 
+                                           '';
+                            walletAddress = String(walletAddress).trim();
+                        } else {
+                            walletAddress = String(walletObj || '').trim();
+                        }
+                    }
+                    
+                    if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
                         walletAddress = '6btAW2SbJQKtwKRebjUuXA2fPv7MAVYJD1tgCvBx6GB5'; // 默认测试地址
                     }
                     
@@ -3337,9 +3455,28 @@
             if (window.walletManager) {
                 // 初始填充
                 setTimeout(() => {
-                    const walletAddress = window.walletManager.getWalletAddress();
+                    let walletAddress = null;
                     
-                    if (walletAddress) {
+                    // 如果getWalletAddress方法不存在，使用备用方法
+                    if (window.walletManager && typeof window.walletManager.getWalletAddress === 'function') {
+                        walletAddress = window.walletManager.getWalletAddress();
+                    } else {
+                        // 备用方法
+                        const walletObj = window.walletManager?.currentWallet;
+                        if (walletObj && typeof walletObj === 'object') {
+                            walletAddress = walletObj.address || 
+                                           walletObj.publicKey || 
+                                           (walletObj.publicKey && walletObj.publicKey.toString()) ||
+                                           (walletObj.publicKey && walletObj.publicKey.toBase58 && walletObj.publicKey.toBase58()) ||
+                                           walletObj.toString() || 
+                                           '';
+                            walletAddress = String(walletAddress).trim();
+                        } else {
+                            walletAddress = String(walletObj || '').trim();
+                        }
+                    }
+                    
+                    if (walletAddress && walletAddress !== 'undefined' && walletAddress !== 'null' && walletAddress !== '[object Object]') {
                         const verifyInput = document.getElementById('verifyAddressInput');
                         if (verifyInput) {
                             verifyInput.value = walletAddress;
