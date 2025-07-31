@@ -55,13 +55,13 @@ class WalletManager {
         }
         
         // 监听Coinbase钱包状态变化
-        if (window.coinbaseWalletSolana) {
-            window.coinbaseWalletSolana.on('connect', () => {
+        if (window.coinbaseWalletSolana && window.coinbaseWalletSolana.solana) {
+            window.coinbaseWalletSolana.solana.on('connect', () => {
                 this.addLog('Coinbase钱包已连接', 'success');
                 this.checkWalletConnection();
             });
             
-            window.coinbaseWalletSolana.on('disconnect', () => {
+            window.coinbaseWalletSolana.solana.on('disconnect', () => {
                 this.addLog('Coinbase钱包已断开', 'warning');
                 this.checkWalletConnection();
             });
@@ -289,20 +289,25 @@ class WalletManager {
         }
 
         try {
-            // 检查是否已经连接
-            if (window.coinbaseWalletSolana.isConnected) {
-                return window.coinbaseWalletSolana;
+            // Coinbase钱包需要先检查是否支持Solana
+            if (!window.coinbaseWalletSolana.solana) {
+                throw new Error('Coinbase钱包不支持Solana网络');
             }
 
-            // 请求连接
-            const response = await window.coinbaseWalletSolana.connect();
+            // 检查是否已经连接
+            if (window.coinbaseWalletSolana.solana.isConnected) {
+                return window.coinbaseWalletSolana.solana;
+            }
+
+            // 请求连接Solana网络
+            const response = await window.coinbaseWalletSolana.solana.connect();
             
             // 验证连接结果
             if (!response.publicKey) {
                 throw new Error('连接失败：未获取到公钥');
             }
 
-            return window.coinbaseWalletSolana;
+            return window.coinbaseWalletSolana.solana;
         } catch (error) {
             if (error.code === 4001) {
                 throw new Error('用户拒绝了连接请求');
@@ -392,11 +397,11 @@ class WalletManager {
                 this.publicKey = window.okxwallet.solana.publicKey ? window.okxwallet.solana.publicKey.toString() : null;
             }
             // 检查Coinbase钱包
-            else if (window.coinbaseWalletSolana && window.coinbaseWalletSolana.isConnected) {
+            else if (window.coinbaseWalletSolana && window.coinbaseWalletSolana.solana && window.coinbaseWalletSolana.solana.isConnected) {
                 this.isConnected = true;
-                this.currentWallet = window.coinbaseWalletSolana;
+                this.currentWallet = window.coinbaseWalletSolana.solana;
                 this.walletType = 'coinbase';
-                this.publicKey = window.coinbaseWalletSolana.publicKey ? window.coinbaseWalletSolana.publicKey.toString() : null;
+                this.publicKey = window.coinbaseWalletSolana.solana.publicKey ? window.coinbaseWalletSolana.solana.publicKey.toString() : null;
             }
             else {
                 // 重置状态
@@ -509,7 +514,7 @@ class WalletManager {
             case 'okx':
                 return !!(window.okxwallet && window.okxwallet.solana);
             case 'coinbase':
-                return !!window.coinbaseWalletSolana;
+                return !!(window.coinbaseWalletSolana && window.coinbaseWalletSolana.solana);
             default:
                 return false;
         }
@@ -679,8 +684,9 @@ class WalletManager {
         
         console.log('Coinbase钱包:', {
             exists: !!window.coinbaseWalletSolana,
-            isConnected: !!(window.coinbaseWalletSolana && window.coinbaseWalletSolana.isConnected),
-            publicKey: window.coinbaseWalletSolana?.publicKey?.toString()
+            hasSolana: !!(window.coinbaseWalletSolana && window.coinbaseWalletSolana.solana),
+            isConnected: !!(window.coinbaseWalletSolana && window.coinbaseWalletSolana.solana && window.coinbaseWalletSolana.solana.isConnected),
+            publicKey: window.coinbaseWalletSolana?.solana?.publicKey?.toString()
         });
         
         console.log('当前管理器状态:', {
