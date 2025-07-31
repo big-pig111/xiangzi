@@ -2379,12 +2379,31 @@
                 return;
             }
             
-            // 确保获取的是字符串类型的钱包地址
-            const walletAddress = String(window.walletManager.currentWallet || '').trim();
-            console.log('处理后的钱包地址:', walletAddress);
+            // 正确提取钱包地址 - currentWallet是对象，需要获取其中的地址
+            let walletAddress = '';
+            const walletObj = window.walletManager.currentWallet;
             
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null') {
-                alert('钱包地址无效，请重新连接钱包');
+            console.log('钱包对象详情:', walletObj);
+            console.log('钱包对象类型:', typeof walletObj);
+            
+            // 尝试多种可能的属性名来获取地址
+            if (walletObj && typeof walletObj === 'object') {
+                walletAddress = walletObj.address || 
+                               walletObj.publicKey || 
+                               walletObj.toString() || 
+                               (walletObj.toBase58 && walletObj.toBase58()) ||
+                               '';
+            } else {
+                walletAddress = String(walletObj || '');
+            }
+            
+            walletAddress = String(walletAddress).trim();
+            console.log('提取到的钱包地址:', walletAddress);
+            
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
+                alert(`钱包地址提取失败！
+钱包对象: ${JSON.stringify(walletObj)}
+请检查wallet-connect.js中的钱包地址存储方式`);
                 return;
             }
             
@@ -2529,12 +2548,31 @@
                 return;
             }
             
-            // 确保获取的是字符串类型的钱包地址
-            const walletAddress = String(window.walletManager.currentWallet || '').trim();
-            console.log('处理后的钱包地址:', walletAddress);
+            // 正确提取钱包地址 - currentWallet是对象，需要获取其中的地址
+            let walletAddress = '';
+            const walletObj = window.walletManager.currentWallet;
             
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null') {
-                alert('钱包地址无效，请重新连接钱包');
+            console.log('钱包对象详情:', walletObj);
+            console.log('钱包对象类型:', typeof walletObj);
+            
+            // 尝试多种可能的属性名来获取地址
+            if (walletObj && typeof walletObj === 'object') {
+                walletAddress = walletObj.address || 
+                               walletObj.publicKey || 
+                               walletObj.toString() || 
+                               (walletObj.toBase58 && walletObj.toBase58()) ||
+                               '';
+            } else {
+                walletAddress = String(walletObj || '');
+            }
+            
+            walletAddress = String(walletAddress).trim();
+            console.log('提取到的钱包地址:', walletAddress);
+            
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
+                alert(`钱包地址提取失败！
+钱包对象: ${JSON.stringify(walletObj)}
+请检查wallet-connect.js中的钱包地址存储方式`);
                 return;
             }
             
