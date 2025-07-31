@@ -2356,12 +2356,11 @@
                 return;
             }
             
-            // 获取钱包地址
-            const walletAddress = window.walletManager.currentWallet?.address || 
-                                window.walletManager.currentWallet?.publicKey || 
-                                String(window.walletManager.currentWallet || '');
+            // 获取钱包地址 - 使用标准化的方法
+            const walletAddress = window.walletManager.getWalletAddress();
+            console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress || walletAddress === 'undefined') {
+            if (!walletAddress) {
                 document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 钱包地址无效</span>';
                 document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 钱包地址无效</span>';
                 document.getElementById('claimTop20Btn').disabled = true;
@@ -2565,23 +2564,10 @@
             }
             
             // 正确提取钱包地址
-            let walletAddress = '';
-            const walletObj = window.walletManager.currentWallet;
-            
-            if (walletObj && typeof walletObj === 'object') {
-                walletAddress = walletObj.address || 
-                               walletObj.publicKey || 
-                               walletObj.toString() || 
-                               (walletObj.toBase58 && walletObj.toBase58()) ||
-                               '';
-            } else {
-                walletAddress = String(walletObj || '');
-            }
-            
-            walletAddress = String(walletAddress).trim();
+            const walletAddress = window.walletManager.getWalletAddress();
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
+            if (!walletAddress) {
                 alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
@@ -2651,23 +2637,10 @@
             }
             
             // 正确提取钱包地址
-            let walletAddress = '';
-            const walletObj = window.walletManager.currentWallet;
-            
-            if (walletObj && typeof walletObj === 'object') {
-                walletAddress = walletObj.address || 
-                               walletObj.publicKey || 
-                               walletObj.toString() || 
-                               (walletObj.toBase58 && walletObj.toBase58()) ||
-                               '';
-            } else {
-                walletAddress = String(walletObj || '');
-            }
-            
-            walletAddress = String(walletAddress).trim();
+            const walletAddress = window.walletManager.getWalletAddress();
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
+            if (!walletAddress) {
                 alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
@@ -2840,7 +2813,19 @@
         // 验证前20持有者资格
         async function validateTop20Eligibility(walletAddress) {
             try {
-                console.log('验证前20持有者资格:', walletAddress);
+                console.log('=== 验证前20持有者资格开始 ===');
+                console.log('输入的钱包地址:', walletAddress);
+                
+                // 标准化钱包地址格式
+                const normalizedAddress = String(walletAddress).trim();
+                console.log('标准化后的地址:', normalizedAddress);
+                
+                if (!normalizedAddress || normalizedAddress === 'undefined' || normalizedAddress === 'null') {
+                    return {
+                        eligible: false,
+                        reason: '钱包地址无效'
+                    };
+                }
                 
                 // 直接获取数据库中的所有持仓轮次
                 const holderRoundsRef = firebase.database().ref('holderRewardRounds');
@@ -2848,6 +2833,7 @@
                 const holderRounds = holderRoundsSnap.val();
                 
                 if (!holderRounds) {
+                    console.log('数据库中没有持仓轮次数据');
                     return {
                         eligible: false,
                         reason: '数据库中没有持仓轮次数据'
@@ -2867,21 +2853,36 @@
                 
                 for (const roundId of roundIds) {
                     const roundData = holderRounds[roundId];
-                    console.log(`检查轮次 ${roundId}:`, roundData);
+                    console.log(`\n--- 检查轮次 ${roundId} ---`);
+                    console.log('轮次数据:', roundData);
                     
                     if (roundData && roundData.top20Holders && Array.isArray(roundData.top20Holders)) {
+                        console.log(`轮次 ${roundId} 前20持有者数量:`, roundData.top20Holders.length);
+                        
                         // 检查地址是否在前20中
-                        const isTop20 = roundData.top20Holders.some(holder => {
+                        let foundInThisRound = false;
+                        let foundHolder = null;
+                        
+                        for (let i = 0; i < roundData.top20Holders.length; i++) {
+                            const holder = roundData.top20Holders[i];
                             const holderAddress = holder.address || holder.wallet || holder.publicKey;
-                            console.log(`比较地址: ${holderAddress} vs ${walletAddress}`);
-                            return holderAddress === walletAddress;
-                        });
+                            
+                            console.log(`检查第${i+1}个持有者:`, holderAddress);
+                            console.log(`比较: "${holderAddress}" === "${normalizedAddress}"`);
+                            
+                            if (holderAddress === normalizedAddress) {
+                                foundInThisRound = true;
+                                foundHolder = holder;
+                                console.log(`✅ 在轮次 ${roundId} 中找到匹配的地址！`);
+                                break;
+                            }
+                        }
                         
-                        console.log(`轮次 ${roundId} 中是否在前20:`, isTop20);
-                        
-                        if (isTop20) {
+                        if (foundInThisRound) {
+                            console.log(`找到的持有者详情:`, foundHolder);
+                            
                             // 检查是否已经领取过这个轮次的奖励
-                            const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                            const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${normalizedAddress}`);
                             const claimedSnap = await claimedRef.once('value');
                             const hasClaimed = claimedSnap.exists();
                             
@@ -2892,11 +2893,17 @@
                                 if (!window.solanaTracker) window.solanaTracker = {};
                                 window.solanaTracker.currentHolderRewardRoundId = roundId;
                                 
+                                console.log(`✅ 验证成功！设置轮次ID: ${roundId}`);
                                 return { 
                                     eligible: true,
-                                    roundId: roundId
+                                    roundId: roundId,
+                                    holder: foundHolder
                                 };
+                            } else {
+                                console.log(`⚠️ 已领取过轮次 ${roundId} 的奖励`);
                             }
+                        } else {
+                            console.log(`❌ 在轮次 ${roundId} 中未找到匹配的地址`);
                         }
                     } else {
                         console.log(`轮次 ${roundId} 数据无效:`, roundData);
@@ -2904,9 +2911,10 @@
                 }
                 
                 // 如果所有轮次都检查完了，说明没有资格
+                console.log('=== 验证结束：未找到符合条件的轮次 ===');
                 return {
                     eligible: false,
-                    reason: `您的地址不在任何持仓前20持有者中，或已领取过所有轮次的奖励\n\n检查的轮次: ${roundIds.join(', ')}`
+                    reason: `您的地址不在任何持仓前20持有者中，或已领取过所有轮次的奖励\n\n检查的轮次: ${roundIds.join(', ')}\n\n您的地址: ${normalizedAddress}`
                 };
                 
             } catch (error) {
@@ -3079,23 +3087,10 @@
             }
             
             // 正确提取钱包地址
-            let walletAddress = '';
-            const walletObj = window.walletManager.currentWallet;
-            
-            if (walletObj && typeof walletObj === 'object') {
-                walletAddress = walletObj.address || 
-                               walletObj.publicKey || 
-                               walletObj.toString() || 
-                               (walletObj.toBase58 && walletObj.toBase58()) ||
-                               '';
-            } else {
-                walletAddress = String(walletObj || '');
-            }
-            
-            walletAddress = String(walletAddress).trim();
+            const walletAddress = window.walletManager.getWalletAddress();
             console.log('提取到的钱包地址:', walletAddress);
             
-            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
+            if (!walletAddress) {
                 alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
@@ -3146,11 +3141,9 @@
             if (!window.walletManager || !window.walletManager.isConnected) return;
             
             try {
-                const walletAddress = window.walletManager.currentWallet?.address || 
-                                    window.walletManager.currentWallet?.publicKey || 
-                                    String(window.walletManager.currentWallet || '');
+                const walletAddress = window.walletManager.getWalletAddress();
                 
-                if (!walletAddress || walletAddress === 'undefined') return;
+                if (!walletAddress) return;
                 
                 const userRef = firebase.database().ref(`users/${walletAddress}`);
                 const userSnap = await userRef.once('value');
@@ -3195,14 +3188,23 @@
                 debugResult.innerHTML = '<span class="text-blue-400">⏳ 调试中...</span>';
                 
                 try {
-                    const walletAddress = '6btAW2SbJQKtwKRebjUuXA2fPv7MAVYJD1tgCvBx6GB5';
+                    // 获取当前连接的钱包地址
+                    let walletAddress = window.walletManager?.getWalletAddress();
+                    
+                    if (!walletAddress) {
+                        walletAddress = '6btAW2SbJQKtwKRebjUuXA2fPv7MAVYJD1tgCvBx6GB5'; // 默认测试地址
+                    }
+                    
+                    let debugInfo = '<div class="space-y-2">';
+                    debugInfo += '<div><strong>🔍 调试信息:</strong></div>';
+                    debugInfo += `<div>• 当前钱包地址: ${walletAddress}</div>`;
+                    debugInfo += `<div>• 钱包连接状态: ${window.walletManager?.isConnected ? '✅ 已连接' : '❌ 未连接'}</div>`;
                     
                     // 1. 检查所有轮次
                     const holderRoundsRef = firebase.database().ref('holderRewardRounds');
                     const holderRoundsSnap = await holderRoundsRef.once('value');
                     const holderRounds = holderRoundsSnap.val();
                     
-                    let debugInfo = '<div class="space-y-2">';
                     debugInfo += '<div><strong>📊 数据库轮次列表:</strong></div>';
                     
                     if (holderRounds) {
@@ -3223,13 +3225,23 @@
                                 debugInfo += `<div>• 前20持有者数量: ${roundData.top20Holders.length}</div>`;
                                 
                                 // 检查是否包含目标地址
-                                const isInTop20 = roundData.top20Holders.some(h => h.address === walletAddress);
+                                let isInTop20 = false;
+                                let foundHolder = null;
+                                
+                                for (const holder of roundData.top20Holders) {
+                                    const holderAddress = holder.address || holder.wallet || holder.publicKey;
+                                    if (holderAddress === walletAddress) {
+                                        isInTop20 = true;
+                                        foundHolder = holder;
+                                        break;
+                                    }
+                                }
+                                
                                 debugInfo += `<div>• 包含目标地址: ${isInTop20 ? '✅ 是' : '❌ 否'}</div>`;
                                 
                                 if (isInTop20) {
                                     foundInAnyRound = true;
-                                    const holder = roundData.top20Holders.find(h => h.address === walletAddress);
-                                    debugInfo += `<div>• 地址详情: ${JSON.stringify(holder)}</div>`;
+                                    debugInfo += `<div>• 地址详情: ${JSON.stringify(foundHolder)}</div>`;
                                     
                                     // 检查是否已领取
                                     const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
@@ -3238,10 +3250,11 @@
                                     debugInfo += `<div>• 是否已领取: ${hasClaimed ? '✅ 已领取' : '❌ 未领取'}</div>`;
                                 }
                                 
-                                // 显示前3个地址作为示例
-                                debugInfo += `<div>• 前3个地址示例:</div>`;
-                                roundData.top20Holders.slice(0, 3).forEach((holder, index) => {
-                                    debugInfo += `<div class="ml-4">${index + 1}. ${holder.address}</div>`;
+                                // 显示前5个地址作为示例
+                                debugInfo += `<div>• 前5个地址示例:</div>`;
+                                roundData.top20Holders.slice(0, 5).forEach((holder, index) => {
+                                    const holderAddress = holder.address || holder.wallet || holder.publicKey;
+                                    debugInfo += `<div class="ml-4">${index + 1}. ${holderAddress}</div>`;
                                 });
                             } else {
                                 debugInfo += `<div>❌ 轮次数据无效或缺少top20Holders</div>`;
@@ -3267,6 +3280,9 @@
                         debugInfo += `<div>• 验证结果: ${testResult.eligible ? '✅ 有资格' : '❌ 无资格'}</div>`;
                         if (!testResult.eligible) {
                             debugInfo += `<div>• 原因: ${testResult.reason}</div>`;
+                        } else {
+                            debugInfo += `<div>• 轮次ID: ${testResult.roundId}</div>`;
+                            debugInfo += `<div>• 持有者详情: ${JSON.stringify(testResult.holder)}</div>`;
                         }
                         
                     } else {
@@ -3321,11 +3337,9 @@
             if (window.walletManager) {
                 // 初始填充
                 setTimeout(() => {
-                    const walletAddress = window.walletManager.currentWallet?.address || 
-                                        window.walletManager.currentWallet?.publicKey || 
-                                        String(window.walletManager.currentWallet || '');
+                    const walletAddress = window.walletManager.getWalletAddress();
                     
-                    if (walletAddress && walletAddress !== 'undefined' && walletAddress !== 'null') {
+                    if (walletAddress) {
                         const verifyInput = document.getElementById('verifyAddressInput');
                         if (verifyInput) {
                             verifyInput.value = walletAddress;
