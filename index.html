@@ -2373,7 +2373,12 @@
                 // 获取当前轮次ID（使用最新的持仓奖励轮次）
                 const currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
                 console.log('调试 - 持仓奖励轮次ID:', currentRoundId);
-                console.log('调试 - solanaTracker对象:', window.solanaTracker);
+                console.log('调试 - solanaTracker状态:', {
+                    exists: !!window.solanaTracker,
+                    currentRoundId: window.solanaTracker?.currentRoundId,
+                    currentHolderRewardRoundId: window.solanaTracker?.currentHolderRewardRoundId,
+                    isMonitoring: window.solanaTracker?.isMonitoring
+                });
                 
                 if (!currentRoundId) {
                     alert('无法获取当前轮次信息，请等待游戏数据加载完成');
@@ -2462,7 +2467,12 @@
                 // 获取当前轮次ID（使用最新的倒计时奖励轮次）
                 const currentRoundId = window.solanaTracker ? window.solanaTracker.currentRoundId : null;
                 console.log('调试 - 倒计时奖励轮次ID:', currentRoundId);
-                console.log('调试 - solanaTracker对象:', window.solanaTracker);
+                console.log('调试 - solanaTracker状态:', {
+                    exists: !!window.solanaTracker,
+                    currentRoundId: window.solanaTracker?.currentRoundId,
+                    currentHolderRewardRoundId: window.solanaTracker?.currentHolderRewardRoundId,
+                    isMonitoring: window.solanaTracker?.isMonitoring
+                });
                 
                 if (!currentRoundId) {
                     alert('无法获取当前轮次信息，请等待游戏数据加载完成');
