@@ -2330,14 +2330,26 @@
                 return { valid: false, message: '地址格式不正确' };
             }
             
+            console.log('验证地址:', address.trim());
+            console.log('当前持仓前20数据:', gameData.top20Holders);
+            console.log('奖励数据中的持仓前20:', rewardData.top20Holders);
+            
+            // 优先使用实时的持仓数据，如果没有则使用奖励数据
+            const holdersToCheck = gameData.top20Holders.length > 0 ? gameData.top20Holders : rewardData.top20Holders;
+            
             // 检查是否在持仓前20持有者中
-            const isTop20 = rewardData.top20Holders.some(holder => holder.address === address.trim());
+            const isTop20 = holdersToCheck.some(holder => holder.address === address.trim());
+            console.log('是否在持仓前20中:', isTop20);
+            
             if (isTop20) {
                 return { valid: true, message: '✅ 该地址在持仓前20持有者中，可领取奖励！', type: 'top20' };
             }
             
             // 检查是否是最后成功地址
-            if (rewardData.lastSuccessAddress === address.trim()) {
+            const lastSuccessAddress = gameData.lastBigBuyAddress || rewardData.lastSuccessAddress;
+            console.log('最后成功地址:', lastSuccessAddress);
+            
+            if (lastSuccessAddress === address.trim()) {
                 return { valid: true, message: '✅ 该地址是最后倒计时地址，可领取奖励！', type: 'lastSuccess' };
             }
             
