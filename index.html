@@ -2468,10 +2468,10 @@
                 const jsonStringWrapped = JSON.stringify(requestBodyWrapped);
                 const jsonStringDirect = JSON.stringify(requestBodyDirect);
                 
-                // 首先尝试直接发送参数（常见的Firebase Functions格式）
-                const jsonString = jsonStringDirect;
+                // Firebase Functions期待包装格式，不是直接格式
+                const jsonString = jsonStringWrapped;
                 
-                console.log('完整请求体对象:', requestBodyDirect);
+                console.log('完整请求体对象:', requestBodyWrapped);
                 console.log('JSON字符串:', jsonString);
                 
                 // 添加最终参数的明显提示（只在claimTop20Reward中）
@@ -2483,7 +2483,7 @@
 直接格式JSON: ${jsonStringDirect}
 包装格式JSON: ${jsonStringWrapped}
 
-当前使用: 直接格式`);
+当前使用: 包装格式`);
                 
                 const response = await fetch('https://us-central1-chat-294cc.cloudfunctions.net/claimGameReward', {
                     method: 'POST',
