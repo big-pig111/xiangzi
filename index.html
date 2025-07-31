@@ -2238,52 +2238,17 @@
                 return;
             }
             
-            const walletAddress = window.walletManager.currentWallet;
+            // 直接启用按钮，让用户尝试领取
+            document.getElementById('claimTop20Btn').disabled = false;
+            document.getElementById('claimLastSuccessBtn').disabled = false;
             
-            try {
-                // 获取用户可领取的奖励列表
-                const functions = firebase.functions();
-                const getUserClaimableRewards = functions.httpsCallable('getUserClaimableRewards');
-                
-                const result = await getUserClaimableRewards({ wallet: walletAddress });
-                
-                if (result.data.success) {
-                    const { claimableRewards, totalTop20, totalCountdown } = result.data;
-                    
-                    // 更新持仓前20持有者信息
-                    if (totalTop20 > 0) {
-                        document.getElementById('totalHolders').textContent = totalTop20;
-                        document.getElementById('top20Count').textContent = '20'; // 固定为20人
-                        document.getElementById('top20Reward').textContent = '30000 TOKENS';
-                        document.getElementById('top20Status').innerHTML = `<span class="text-green-400">✅ 有 ${totalTop20} 个轮次可领取奖励</span>`;
-                        document.getElementById('claimTop20Btn').disabled = false;
-                    } else {
-                        document.getElementById('top20Status').innerHTML = '<span class="text-yellow-400">⏳ 暂无持仓奖励可领取</span>';
-                        document.getElementById('claimTop20Btn').disabled = true;
-                    }
-                    
-                    // 更新最后倒计时奖励信息
-                    if (totalCountdown > 0) {
-                        const lastCountdownReward = claimableRewards.countdown[0]; // 获取最新的
-                        document.getElementById('lastSuccessAddress').textContent = walletAddress.substring(0, 6) + '...' + walletAddress.substring(walletAddress.length - 4);
-                        document.getElementById('lastSuccessAmount').textContent = lastCountdownReward.buyAmount || '未知';
-                        document.getElementById('lastSuccessReward').textContent = '100000 TOKENS';
-                        document.getElementById('lastSuccessStatus').innerHTML = `<span class="text-green-400">✅ 有 ${totalCountdown} 个轮次可领取奖励</span>`;
-                        document.getElementById('claimLastSuccessBtn').disabled = false;
-                    } else {
-                        document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-yellow-400">⏳ 暂无倒计时奖励可领取</span>';
-                        document.getElementById('claimLastSuccessBtn').disabled = true;
-                    }
-                } else {
-                    throw new Error(result.data.message || '获取奖励信息失败');
-                }
-            } catch (error) {
-                console.error('获取奖励信息失败:', error);
-                document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 获取奖励信息失败</span>';
-                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 获取奖励信息失败</span>';
-                document.getElementById('claimTop20Btn').disabled = true;
-                document.getElementById('claimLastSuccessBtn').disabled = true;
-            }
+            // 设置默认显示信息
+            document.getElementById('top20Status').innerHTML = '<span class="text-blue-400">💡 点击按钮尝试领取奖励</span>';
+            document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-blue-400">💡 点击按钮尝试领取奖励</span>';
+            
+            // 设置默认奖励数量显示
+            document.getElementById('top20Reward').textContent = '30000 TOKENS';
+            document.getElementById('lastSuccessReward').textContent = '100000 TOKENS';
         }
 
         // 验证地址功能
@@ -2325,19 +2290,6 @@
                 return;
             }
             
-            // 检查是否有持仓数据
-            if (!rewardData.top20Holders || rewardData.top20Holders.length === 0) {
-                alert('暂无持仓数据，请等待数据加载完成');
-                return;
-            }
-            
-            // 检查用户是否在持仓前20中
-            const isTop20 = rewardData.top20Holders.some(holder => holder.address === walletAddress);
-            if (!isTop20) {
-                alert('您的地址不在持仓前20持有者中');
-                return;
-            }
-            
             try {
                 // 获取当前轮次ID（使用最新的持仓奖励轮次）
                 const currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
@@ -2370,7 +2322,16 @@
                 }
             } catch (error) {
                 console.error('领取奖励失败:', error);
-                alert('奖励领取失败: ' + (error.message || '未知错误'));
+                // 根据错误信息显示不同的提示
+                if (error.message && error.message.includes('不在持仓前20持有者中')) {
+                    alert('❌ 您的地址不在持仓前20持有者中，无法领取此奖励');
+                } else if (error.message && error.message.includes('已领取')) {
+                    alert('❌ 该轮次奖励已领取，无法重复领取');
+                } else if (error.message && error.message.includes('轮次数据不存在')) {
+                    alert('❌ 轮次数据不存在，请等待游戏数据更新');
+                } else {
+                    alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
+                }
             }
         }
 
@@ -2384,18 +2345,6 @@
             const walletAddress = window.walletManager.currentWallet;
             if (!walletAddress) {
                 alert('钱包地址无效');
-                return;
-            }
-            
-            // 检查是否有最后大额买入数据
-            if (!rewardData.lastSuccessAddress) {
-                alert('暂无大额买入数据，请等待数据加载完成');
-                return;
-            }
-            
-            // 检查用户是否是最后大额买入地址
-            if (rewardData.lastSuccessAddress !== walletAddress) {
-                alert('您的地址不是最后倒计时地址');
                 return;
             }
             
@@ -2431,7 +2380,16 @@
                 }
             } catch (error) {
                 console.error('领取奖励失败:', error);
-                alert('奖励领取失败: ' + (error.message || '未知错误'));
+                // 根据错误信息显示不同的提示
+                if (error.message && error.message.includes('不是最后倒计时地址')) {
+                    alert('❌ 您的地址不是最后倒计时地址，无法领取此奖励');
+                } else if (error.message && error.message.includes('已领取')) {
+                    alert('❌ 该轮次奖励已领取，无法重复领取');
+                } else if (error.message && error.message.includes('轮次数据不存在')) {
+                    alert('❌ 轮次数据不存在，请等待游戏数据更新');
+                } else {
+                    alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
+                }
             }
         }
         
