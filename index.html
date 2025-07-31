@@ -2858,14 +2858,24 @@
                 const roundIds = Object.keys(holderRounds);
                 console.log('数据库中的轮次ID列表:', roundIds);
                 
+                // 按时间倒序排列轮次（最新的在前）
+                roundIds.sort((a, b) => {
+                    const timeA = parseInt(a.split('_').pop());
+                    const timeB = parseInt(b.split('_').pop());
+                    return timeB - timeA;
+                });
+                
                 for (const roundId of roundIds) {
                     const roundData = holderRounds[roundId];
                     console.log(`检查轮次 ${roundId}:`, roundData);
                     
-                    if (roundData && roundData.top20Holders) {
-                        const isTop20 = roundData.top20Holders.some(holder => 
-                            holder.address === walletAddress
-                        );
+                    if (roundData && roundData.top20Holders && Array.isArray(roundData.top20Holders)) {
+                        // 检查地址是否在前20中
+                        const isTop20 = roundData.top20Holders.some(holder => {
+                            const holderAddress = holder.address || holder.wallet || holder.publicKey;
+                            console.log(`比较地址: ${holderAddress} vs ${walletAddress}`);
+                            return holderAddress === walletAddress;
+                        });
                         
                         console.log(`轮次 ${roundId} 中是否在前20:`, isTop20);
                         
@@ -2888,6 +2898,8 @@
                                 };
                             }
                         }
+                    } else {
+                        console.log(`轮次 ${roundId} 数据无效:`, roundData);
                     }
                 }
                 
@@ -2920,10 +2932,11 @@
                 
                 for (const roundId of roundIds) {
                     const roundData = holderRounds[roundId];
-                    if (roundData && roundData.top20Holders) {
-                        const isTop20 = roundData.top20Holders.some(holder => 
-                            holder.address === walletAddress
-                        );
+                    if (roundData && roundData.top20Holders && Array.isArray(roundData.top20Holders)) {
+                        const isTop20 = roundData.top20Holders.some(holder => {
+                            const holderAddress = holder.address || holder.wallet || holder.publicKey;
+                            return holderAddress === walletAddress;
+                        });
                         
                         if (isTop20) {
                             const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
