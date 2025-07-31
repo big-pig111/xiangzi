@@ -556,6 +556,10 @@
                 this.transactionCount = 0;
                 this.countdownInterval = null;
                 
+                // 轮次ID相关变量
+                this.currentRoundId = null;
+                this.currentHolderRewardRoundId = null;
+                
                 // 持仓奖励倒计时相关变量
                 this.holderRewardDate = new Date();
                 this.holderRewardDate.setMinutes(this.holderRewardDate.getMinutes() + 3); // 改为3分钟测试
@@ -1412,6 +1416,9 @@
                         .then(() => {
                             console.log('持仓奖励轮次已保存到Firebase，轮次ID:', roundId);
                             this.addLogEntry('📊 持仓奖励轮次已同步到云端', 'success');
+                            
+                            // 保存当前持仓奖励轮次ID到本地
+                            this.currentHolderRewardRoundId = roundId;
                         })
                         .catch((error) => {
                             console.error('保存持仓奖励轮次失败:', error);
@@ -1482,8 +1489,30 @@
                             console.error('从Firebase加载失败:', error);
                             this.addLogEntry('❌ 云端数据加载失败', 'error');
                         });
+                        
+                    // 同时加载最新的持仓奖励轮次ID
+                    this.loadLatestHolderRewardRoundId();
                 } catch (error) {
                     console.error('Firebase加载错误:', error);
+                }
+            }
+            
+            // 加载最新的持仓奖励轮次ID
+            loadLatestHolderRewardRoundId() {
+                try {
+                    database.ref('holderRewardRounds').orderByChild('timestamp').limitToLast(1).once('value')
+                        .then((snapshot) => {
+                            if (snapshot.exists()) {
+                                const data = Object.values(snapshot.val())[0];
+                                this.currentHolderRewardRoundId = data.roundId;
+                                console.log('已加载最新持仓奖励轮次ID:', this.currentHolderRewardRoundId);
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('加载持仓奖励轮次ID失败:', error);
+                        });
+                } catch (error) {
+                    console.error('加载持仓奖励轮次ID错误:', error);
                 }
             }
             
@@ -1571,6 +1600,11 @@
                     
                     this.transactionCount = data.transactionCount || 0;
                     this.totalTimeAdjustment = data.totalTimeAdjustment || 0;
+                    
+                    // 恢复轮次ID
+                    if (data.roundId) {
+                        this.currentRoundId = data.roundId;
+                    }
                     
                     if (data.successAddresses) {
                         successAddresses = data.successAddresses;
@@ -2293,8 +2327,11 @@
             try {
                 // 获取当前轮次ID（使用最新的持仓奖励轮次）
                 const currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
+                console.log('调试 - 持仓奖励轮次ID:', currentRoundId);
+                console.log('调试 - solanaTracker对象:', window.solanaTracker);
+                
                 if (!currentRoundId) {
-                    alert('无法获取当前轮次信息');
+                    alert('无法获取当前轮次信息，请等待游戏数据加载完成');
                     return;
                 }
                 
@@ -2351,8 +2388,11 @@
             try {
                 // 获取当前轮次ID（使用最新的倒计时奖励轮次）
                 const currentRoundId = window.solanaTracker ? window.solanaTracker.currentRoundId : null;
+                console.log('调试 - 倒计时奖励轮次ID:', currentRoundId);
+                console.log('调试 - solanaTracker对象:', window.solanaTracker);
+                
                 if (!currentRoundId) {
-                    alert('无法获取当前轮次信息');
+                    alert('无法获取当前轮次信息，请等待游戏数据加载完成');
                     return;
                 }
                 
