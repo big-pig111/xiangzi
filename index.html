@@ -2266,6 +2266,18 @@
                 // 尝试获取函数列表（如果可用）
                 if (functions && typeof functions.httpsCallable === 'function') {
                     console.log('✅ Firebase Functions可用');
+                    
+                    // 测试一个简单的函数调用
+                    try {
+                        const testFunction = functions.httpsCallable('getRoundDetails');
+                        const testResult = await testFunction({
+                            roundId: 'test',
+                            rewardType: 'top20'
+                        });
+                        console.log('✅ 测试函数调用成功');
+                    } catch (testError) {
+                        console.log('⚠️ 测试函数调用失败（预期行为）:', testError.message);
+                    }
                 } else {
                     console.error('❌ Firebase Functions不可用');
                 }
@@ -2369,6 +2381,17 @@
                     wallet: walletAddress,
                     rewardType: 'top20',
                     roundId: currentRoundId
+                }).catch(error => {
+                    // 如果是序列化错误，尝试重新调用
+                    if (error.message && error.message.includes('hasOwnProperty')) {
+                        console.log('检测到序列化错误，尝试重新调用...');
+                        return claimGameReward({
+                            wallet: walletAddress,
+                            rewardType: 'top20',
+                            roundId: currentRoundId
+                        });
+                    }
+                    throw error;
                 });
                 
                 if (result.data.success) {
@@ -2388,7 +2411,8 @@
                 console.error('错误详情:', {
                     message: error.message,
                     code: error.code,
-                    details: error.details
+                    details: error.details,
+                    stack: error.stack
                 });
                 
                 // 根据错误信息显示不同的提示
@@ -2401,7 +2425,7 @@
                 } else if (error.code === 'functions/unavailable') {
                     alert('❌ Firebase Functions未部署或不可用，请联系管理员');
                 } else if (error.message && error.message.includes('hasOwnProperty')) {
-                    alert('❌ Firebase Functions调用失败，请检查函数部署状态');
+                    alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
                 } else {
                     alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
                 }
@@ -2445,6 +2469,17 @@
                     wallet: walletAddress,
                     rewardType: 'countdown',
                     roundId: currentRoundId
+                }).catch(error => {
+                    // 如果是序列化错误，尝试重新调用
+                    if (error.message && error.message.includes('hasOwnProperty')) {
+                        console.log('检测到序列化错误，尝试重新调用...');
+                        return claimGameReward({
+                            wallet: walletAddress,
+                            rewardType: 'countdown',
+                            roundId: currentRoundId
+                        });
+                    }
+                    throw error;
                 });
                 
                 if (result.data.success) {
@@ -2464,7 +2499,8 @@
                 console.error('错误详情:', {
                     message: error.message,
                     code: error.code,
-                    details: error.details
+                    details: error.details,
+                    stack: error.stack
                 });
                 
                 // 根据错误信息显示不同的提示
@@ -2477,7 +2513,7 @@
                 } else if (error.code === 'functions/unavailable') {
                     alert('❌ Firebase Functions未部署或不可用，请联系管理员');
                 } else if (error.message && error.message.includes('hasOwnProperty')) {
-                    alert('❌ Firebase Functions调用失败，请检查函数部署状态');
+                    alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
                 } else {
                     alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
                 }
