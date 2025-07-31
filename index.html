@@ -2247,9 +2247,30 @@
             const rewardPage = document.getElementById('rewardPage');
             if (rewardPage) {
                 rewardPage.classList.remove('hidden');
+                
+                // 测试Firebase Functions连接
+                await testFirebaseFunctions();
+                
                 await updateRewardPageData(); // 更新奖励数据
                 loadHolderRewardRoundsList(); // 加载持仓奖励历史
                 loadCountdownRewardRoundsList(); // 加载倒计时奖励历史
+            }
+        }
+        
+        // 测试Firebase Functions连接
+        async function testFirebaseFunctions() {
+            try {
+                const functions = firebase.functions();
+                console.log('Firebase Functions对象:', functions);
+                
+                // 尝试获取函数列表（如果可用）
+                if (functions && typeof functions.httpsCallable === 'function') {
+                    console.log('✅ Firebase Functions可用');
+                } else {
+                    console.error('❌ Firebase Functions不可用');
+                }
+            } catch (error) {
+                console.error('Firebase Functions测试失败:', error);
             }
         }
 
@@ -2339,6 +2360,12 @@
                 const functions = firebase.functions();
                 const claimGameReward = functions.httpsCallable('claimGameReward');
                 
+                console.log('调用Firebase函数，参数:', {
+                    wallet: walletAddress,
+                    rewardType: 'top20',
+                    roundId: currentRoundId
+                });
+                
                 const result = await claimGameReward({
                     wallet: walletAddress,
                     rewardType: 'top20',
@@ -2359,6 +2386,12 @@
                 }
             } catch (error) {
                 console.error('领取奖励失败:', error);
+                console.error('错误详情:', {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details
+                });
+                
                 // 根据错误信息显示不同的提示
                 if (error.message && error.message.includes('不在持仓前20持有者中')) {
                     alert('❌ 您的地址不在持仓前20持有者中，无法领取此奖励');
@@ -2366,6 +2399,10 @@
                     alert('❌ 该轮次奖励已领取，无法重复领取');
                 } else if (error.message && error.message.includes('轮次数据不存在')) {
                     alert('❌ 轮次数据不存在，请等待游戏数据更新');
+                } else if (error.code === 'functions/unavailable') {
+                    alert('❌ Firebase Functions未部署或不可用，请联系管理员');
+                } else if (error.message && error.message.includes('hasOwnProperty')) {
+                    alert('❌ Firebase Functions调用失败，请检查函数部署状态');
                 } else {
                     alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
                 }
@@ -2400,6 +2437,12 @@
                 const functions = firebase.functions();
                 const claimGameReward = functions.httpsCallable('claimGameReward');
                 
+                console.log('调用Firebase函数，参数:', {
+                    wallet: walletAddress,
+                    rewardType: 'countdown',
+                    roundId: currentRoundId
+                });
+                
                 const result = await claimGameReward({
                     wallet: walletAddress,
                     rewardType: 'countdown',
@@ -2420,6 +2463,12 @@
                 }
             } catch (error) {
                 console.error('领取奖励失败:', error);
+                console.error('错误详情:', {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details
+                });
+                
                 // 根据错误信息显示不同的提示
                 if (error.message && error.message.includes('不是最后倒计时地址')) {
                     alert('❌ 您的地址不是最后倒计时地址，无法领取此奖励');
@@ -2427,6 +2476,10 @@
                     alert('❌ 该轮次奖励已领取，无法重复领取');
                 } else if (error.message && error.message.includes('轮次数据不存在')) {
                     alert('❌ 轮次数据不存在，请等待游戏数据更新');
+                } else if (error.code === 'functions/unavailable') {
+                    alert('❌ Firebase Functions未部署或不可用，请联系管理员');
+                } else if (error.message && error.message.includes('hasOwnProperty')) {
+                    alert('❌ Firebase Functions调用失败，请检查函数部署状态');
                 } else {
                     alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
                 }
