@@ -2363,7 +2363,8 @@
                 return;
             }
             
-            const walletAddress = window.walletManager.currentWallet;
+            // 确保获取的是字符串类型的钱包地址
+            const walletAddress = String(window.walletManager.currentWallet || '').trim();
             if (!walletAddress) {
                 alert('钱包地址无效');
                 return;
@@ -2371,7 +2372,10 @@
             
             try {
                 // 获取当前轮次ID（使用最新的持仓奖励轮次）
-                const currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
+                let currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
+                // 确保轮次ID是字符串类型
+                currentRoundId = String(currentRoundId || '').trim();
+                
                 console.log('调试 - 持仓奖励轮次ID:', currentRoundId);
                 console.log('调试 - solanaTracker状态:', {
                     exists: !!window.solanaTracker,
@@ -2380,17 +2384,19 @@
                     isMonitoring: window.solanaTracker?.isMonitoring
                 });
                 
-                if (!currentRoundId) {
+                if (!currentRoundId || currentRoundId === 'null' || currentRoundId === 'undefined') {
                     alert('无法获取当前轮次信息，请等待游戏数据加载完成');
                     return;
                 }
                 
-                // 直接用 HTTP 请求调用 Firebase Functions（绕过 SDK 问题）
-                console.log('直接 HTTP 调用 Firebase Functions，参数:', {
+                // 确保所有参数都是安全的字符串
+                const requestData = {
                     wallet: walletAddress,
                     rewardType: 'top20',
                     roundId: currentRoundId
-                });
+                };
+                
+                console.log('直接 HTTP 调用 Firebase Functions，参数:', requestData);
                 
                 const response = await fetch('https://us-central1-chat-294cc.cloudfunctions.net/claimGameReward', {
                     method: 'POST',
@@ -2398,11 +2404,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        data: {
-                            wallet: walletAddress,
-                            rewardType: 'top20',
-                            roundId: currentRoundId
-                        }
+                        data: requestData
                     })
                 });
                 
@@ -2457,7 +2459,8 @@
                 return;
             }
             
-            const walletAddress = window.walletManager.currentWallet;
+            // 确保获取的是字符串类型的钱包地址
+            const walletAddress = String(window.walletManager.currentWallet || '').trim();
             if (!walletAddress) {
                 alert('钱包地址无效');
                 return;
@@ -2465,7 +2468,10 @@
             
             try {
                 // 获取当前轮次ID（使用最新的倒计时奖励轮次）
-                const currentRoundId = window.solanaTracker ? window.solanaTracker.currentRoundId : null;
+                let currentRoundId = window.solanaTracker ? window.solanaTracker.currentRoundId : null;
+                // 确保轮次ID是字符串类型
+                currentRoundId = String(currentRoundId || '').trim();
+                
                 console.log('调试 - 倒计时奖励轮次ID:', currentRoundId);
                 console.log('调试 - solanaTracker状态:', {
                     exists: !!window.solanaTracker,
@@ -2474,17 +2480,19 @@
                     isMonitoring: window.solanaTracker?.isMonitoring
                 });
                 
-                if (!currentRoundId) {
+                if (!currentRoundId || currentRoundId === 'null' || currentRoundId === 'undefined') {
                     alert('无法获取当前轮次信息，请等待游戏数据加载完成');
                     return;
                 }
                 
-                // 直接用 HTTP 请求调用 Firebase Functions（绕过 SDK 问题）
-                console.log('直接 HTTP 调用 Firebase Functions，参数:', {
+                // 确保所有参数都是安全的字符串
+                const requestData = {
                     wallet: walletAddress,
                     rewardType: 'countdown',
                     roundId: currentRoundId
-                });
+                };
+                
+                console.log('直接 HTTP 调用 Firebase Functions，参数:', requestData);
                 
                 const response = await fetch('https://us-central1-chat-294cc.cloudfunctions.net/claimGameReward', {
                     method: 'POST',
@@ -2492,11 +2500,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        data: {
-                            wallet: walletAddress,
-                            rewardType: 'countdown',
-                            roundId: currentRoundId
-                        }
+                        data: requestData
                     })
                 });
                 
