@@ -632,7 +632,7 @@
             
             // 更新倒计时
             updateCountdown() {
-                const now = new Date();
+            const now = new Date();
                 const timeLeft = this.countdownDate - now;
                 
                 // 调试信息
@@ -2380,31 +2380,32 @@
                     return;
                 }
                 
-                // 调用Firebase函数领取奖励
-                const claimGameReward = functions.httpsCallable('claimGameReward');
-                
-                console.log('调用Firebase函数，参数:', {
+                // 直接用 HTTP 请求调用 Firebase Functions（绕过 SDK 问题）
+                console.log('直接 HTTP 调用 Firebase Functions，参数:', {
                     wallet: walletAddress,
                     rewardType: 'top20',
                     roundId: currentRoundId
                 });
                 
-                const result = await claimGameReward({
-                    wallet: walletAddress,
-                    rewardType: 'top20',
-                    roundId: currentRoundId
-                }).catch(error => {
-                    // 如果是序列化错误，尝试重新调用
-                    if (error.message && error.message.includes('hasOwnProperty')) {
-                        console.log('检测到序列化错误，尝试重新调用...');
-                        return claimGameReward({
+                const response = await fetch('https://us-central1-chat-294cc.cloudfunctions.net/claimGameReward', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: {
                             wallet: walletAddress,
                             rewardType: 'top20',
                             roundId: currentRoundId
-                        });
-                    }
-                    throw error;
+                        }
+                    })
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
                 
                 if (result.data.success) {
                     alert(`🏆 持仓前20持有者奖励领取成功！\n获得 ${result.data.amount} TOKENS\n交易哈希: ${result.data.txHash}`);
@@ -2468,31 +2469,32 @@
                     return;
                 }
                 
-                // 调用Firebase函数领取奖励
-                const claimGameReward = functions.httpsCallable('claimGameReward');
-                
-                console.log('调用Firebase函数，参数:', {
+                // 直接用 HTTP 请求调用 Firebase Functions（绕过 SDK 问题）
+                console.log('直接 HTTP 调用 Firebase Functions，参数:', {
                     wallet: walletAddress,
                     rewardType: 'countdown',
                     roundId: currentRoundId
                 });
                 
-                const result = await claimGameReward({
-                    wallet: walletAddress,
-                    rewardType: 'countdown',
-                    roundId: currentRoundId
-                }).catch(error => {
-                    // 如果是序列化错误，尝试重新调用
-                    if (error.message && error.message.includes('hasOwnProperty')) {
-                        console.log('检测到序列化错误，尝试重新调用...');
-                        return claimGameReward({
+                const response = await fetch('https://us-central1-chat-294cc.cloudfunctions.net/claimGameReward', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: {
                             wallet: walletAddress,
                             rewardType: 'countdown',
                             roundId: currentRoundId
-                        });
-                    }
-                    throw error;
+                        }
+                    })
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
                 
                 if (result.data.success) {
                     alert(`💰 最后倒计时奖励领取成功！\n获得 ${result.data.amount} TOKENS\n交易哈希: ${result.data.txHash}`);
