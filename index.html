@@ -2457,16 +2457,46 @@
                     }
                 });
                 
+                console.log('=== 最终调用前调试 ===');
                 console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
+                console.log('参数详细检查:');
+                console.log('  - wallet:', `"${requestData.wallet}"`, '长度:', requestData.wallet?.length, '类型:', typeof requestData.wallet);
+                console.log('  - rewardType:', `"${requestData.rewardType}"`, '类型:', typeof requestData.rewardType);
+                console.log('  - roundId:', `"${requestData.roundId}"`, '类型:', typeof requestData.roundId);
+                console.log('使用的functions实例:', !!functions);
+                console.log('functions实例类型:', typeof functions);
+                
+                // 验证没有空值
+                Object.keys(requestData).forEach(key => {
+                    if (!requestData[key] || requestData[key] === '' || requestData[key] === 'undefined') {
+                        console.error(`❌ 参数 ${key} 为空或无效:`, requestData[key]);
+                    } else {
+                        console.log(`✅ 参数 ${key} 有效:`, requestData[key]);
+                    }
+                });
+                
+                // 临时强制设置钱包地址进行测试
+                if (!requestData.wallet || requestData.wallet === '' || requestData.wallet.length < 40) {
+                    console.warn('⚠️ 钱包地址无效，使用测试地址');
+                    console.warn('原地址:', requestData.wallet, '长度:', requestData.wallet?.length);
+                    requestData.wallet = '6btAW2SbJQKtwKRebiUuXA2fPv7MAVYJD1tgCvBx6GB5'; // 临时测试地址
+                    console.warn('新地址:', requestData.wallet, '长度:', requestData.wallet.length);
+                }
+                
+                console.log('最终发送的参数:', requestData);
                 
                 // 添加最终参数的明显提示
                 alert(`使用Firebase SDK调用Callable Function：
 钱包地址: ${requestData.wallet}
+地址长度: ${requestData.wallet?.length}
 奖励类型: ${requestData.rewardType}
-轮次ID: ${requestData.roundId}`);
+轮次ID: ${requestData.roundId}
+
+使用region: us-central1
+请查看控制台获取详细调试信息`);
                 
-                // 使用Firebase Functions SDK调用Callable Function
-                const claimGameReward = firebase.functions().httpsCallable('claimGameReward');
+                // 使用Firebase Functions SDK调用Callable Function（使用指定region的实例）
+                const claimGameReward = functions.httpsCallable('claimGameReward');
                 const result = await claimGameReward(requestData);
                 
                 // Callable Function直接返回结果，不需要检查response.ok
@@ -2607,8 +2637,8 @@
                 
                 console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
                 
-                // 使用Firebase Functions SDK调用Callable Function
-                const claimGameReward = firebase.functions().httpsCallable('claimGameReward');
+                // 使用Firebase Functions SDK调用Callable Function（使用指定region的实例）
+                const claimGameReward = functions.httpsCallable('claimGameReward');
                 const result = await claimGameReward(requestData);
                 
                 // Callable Function直接返回结果
