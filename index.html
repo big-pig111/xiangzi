@@ -521,10 +521,10 @@
     </div>
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions.js"></script>
     
     <!-- 钱包连接管理器 -->
     <script src="wallet-connect.js"></script>
@@ -542,8 +542,9 @@
         };
 
         // 初始化Firebase
-        firebase.initializeApp(firebaseConfig);
+        const app = firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        const functions = firebase.functions(app, 'us-central1'); // 指定region
         
         // Solana实时交易检测器类
         class SolanaTransactionTracker {
@@ -2260,7 +2261,6 @@
         // 测试Firebase Functions连接
         async function testFirebaseFunctions() {
             try {
-                const functions = firebase.functions();
                 console.log('Firebase Functions对象:', functions);
                 
                 // 尝试获取函数列表（如果可用）
@@ -2357,7 +2357,6 @@
                 }
                 
                 // 调用Firebase函数领取奖励
-                const functions = firebase.functions();
                 const claimGameReward = functions.httpsCallable('claimGameReward');
                 
                 console.log('调用Firebase函数，参数:', {
@@ -2434,7 +2433,6 @@
                 }
                 
                 // 调用Firebase函数领取奖励
-                const functions = firebase.functions();
                 const claimGameReward = functions.httpsCallable('claimGameReward');
                 
                 console.log('调用Firebase函数，参数:', {
