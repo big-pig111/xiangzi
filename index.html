@@ -370,6 +370,15 @@
                     <div class="text-gray-400 text-xs">
                         💡 提示：领取游戏奖励后，您将获得积分。使用积分可以兑换真实的代币到您的钱包！
                     </div>
+                    
+                    <!-- 调试按钮 -->
+                    <div class="mt-4 p-3 bg-gray-600 rounded border border-yellow-500">
+                        <div class="text-yellow-400 text-sm font-bold mb-2">🔧 调试工具</div>
+                        <button id="debugBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded text-sm">
+                            🔍 调试验证逻辑
+                        </button>
+                        <div id="debugResult" class="mt-2 text-xs text-gray-300"></div>
+                    </div>
                 </div>
                 
                 <!-- 奖励详情展示 -->
@@ -2330,6 +2339,14 @@
 
         // 更新奖励页面数据
         async function updateRewardPageData() {
+            // 添加调试信息
+            console.log('=== 奖励页面数据更新调试 ===');
+            console.log('window.solanaTracker:', !!window.solanaTracker);
+            if (window.solanaTracker) {
+                console.log('currentHolderRewardRoundId:', window.solanaTracker.currentHolderRewardRoundId);
+                console.log('currentRoundId:', window.solanaTracker.currentRoundId);
+            }
+            
             // 检查钱包连接状态
             if (!window.walletManager || !window.walletManager.isConnected) {
                 document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 请先连接钱包</span>';
@@ -2354,8 +2371,41 @@
             
             try {
                 // 验证前20持有者资格
-                const top20Eligibility = await validateTop20Eligibility(walletAddress);
-                const top20Claimed = await checkTop20Claimed(walletAddress);
+                let top20Eligibility = await validateTop20Eligibility(walletAddress);
+                let top20Claimed = await checkTop20Claimed(walletAddress);
+                
+                // 如果轮次ID为空，尝试使用最新的轮次ID
+                if (!window.solanaTracker?.currentHolderRewardRoundId) {
+                    console.log('前端轮次ID为空，尝试获取最新轮次...');
+                    try {
+                        const holderRoundsRef = firebase.database().ref('holderRewardRounds');
+                        const holderRoundsSnap = await holderRoundsRef.once('value');
+                        const holderRounds = holderRoundsSnap.val();
+                        
+                        if (holderRounds) {
+                            const latestRoundId = Object.keys(holderRounds).sort().pop();
+                            console.log('找到最新轮次ID:', latestRoundId);
+                            
+                            if (latestRoundId) {
+                                // 临时设置轮次ID
+                                if (!window.solanaTracker) window.solanaTracker = {};
+                                window.solanaTracker.currentHolderRewardRoundId = latestRoundId;
+                                
+                                // 重新验证
+                                const retryEligibility = await validateTop20Eligibility(walletAddress);
+                                const retryClaimed = await checkTop20Claimed(walletAddress);
+                                
+                                if (retryEligibility.eligible) {
+                                    console.log('使用最新轮次验证成功');
+                                    top20Eligibility = retryEligibility;
+                                    top20Claimed = retryClaimed;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('获取最新轮次失败:', error);
+                    }
+                }
                 
                 if (top20Claimed) {
                     document.getElementById('top20Status').innerHTML = '<span class="text-green-400">✅ 已领取前20持有者奖励</span>';
@@ -2402,8 +2452,8 @@
             document.getElementById('lastSuccessReward').textContent = '10000 积分';
         }
 
-        // 验证地址功能
-        function verifyAddress(address) {
+        // 验证地址功能（基于数据库数据）
+        async function verifyAddress(address) {
             if (!address || address.trim() === '') {
                 return { valid: false, message: '请输入有效的钱包地址' };
             }
@@ -2415,29 +2465,93 @@
             }
             
             console.log('验证地址:', address.trim());
-            console.log('当前持仓前20数据:', gameData.top20Holders);
-            console.log('奖励数据中的持仓前20:', rewardData.top20Holders);
             
-            // 优先使用实时的持仓数据，如果没有则使用奖励数据
-            const holdersToCheck = gameData.top20Holders.length > 0 ? gameData.top20Holders : rewardData.top20Holders;
-            
-            // 检查是否在持仓前20持有者中
-            const isTop20 = holdersToCheck.some(holder => holder.address === address.trim());
-            console.log('是否在持仓前20中:', isTop20);
-            
-            if (isTop20) {
-                return { valid: true, message: '✅ 该地址在持仓前20持有者中，可领取奖励！', type: 'top20' };
+            try {
+                const trimmedAddress = address.trim();
+                
+                // 1. 检查是否在持仓前20持有者中
+                if (window.solanaTracker && window.solanaTracker.currentHolderRewardRoundId) {
+                    const roundId = window.solanaTracker.currentHolderRewardRoundId;
+                    const roundRef = firebase.database().ref(`holderRewardRounds/${roundId}`);
+                    const roundSnap = await roundRef.once('value');
+                    const roundData = roundSnap.val();
+                    
+                    if (roundData && roundData.top20Holders) {
+                        const isTop20 = roundData.top20Holders.some(holder => 
+                            holder.address === trimmedAddress
+                        );
+                        
+                        if (isTop20) {
+                            // 检查是否已经领取过
+                            const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${trimmedAddress}`);
+                            const claimedSnap = await claimedRef.once('value');
+                            const hasClaimed = claimedSnap.exists();
+                            
+                            if (hasClaimed) {
+                                return { 
+                                    valid: true, 
+                                    message: '✅ 该地址在持仓前20持有者中，但已领取过奖励', 
+                                    type: 'top20',
+                                    claimed: true
+                                };
+                            } else {
+                                return { 
+                                    valid: true, 
+                                    message: '✅ 该地址在持仓前20持有者中，可领取奖励！', 
+                                    type: 'top20',
+                                    claimed: false
+                                };
+                            }
+                        }
+                    }
+                }
+                
+                // 2. 检查是否是最后大额买入地址
+                if (window.solanaTracker && window.solanaTracker.currentRoundId) {
+                    const roundId = window.solanaTracker.currentRoundId;
+                    const roundRef = firebase.database().ref(`gameRounds/${roundId}`);
+                    const roundSnap = await roundRef.once('value');
+                    const roundData = roundSnap.val();
+                    
+                    if (roundData && roundData.lastBigBuyAddress) {
+                        if (roundData.lastBigBuyAddress === trimmedAddress) {
+                            // 检查是否已经领取过
+                            const claimedRef = firebase.database().ref(`claimedRewards/countdown/${roundId}/${trimmedAddress}`);
+                            const claimedSnap = await claimedRef.once('value');
+                            const hasClaimed = claimedSnap.exists();
+                            
+                            if (hasClaimed) {
+                                return { 
+                                    valid: true, 
+                                    message: '✅ 该地址是最后倒计时地址，但已领取过奖励', 
+                                    type: 'lastSuccess',
+                                    claimed: true
+                                };
+                            } else {
+                                return { 
+                                    valid: true, 
+                                    message: '✅ 该地址是最后倒计时地址，可领取奖励！', 
+                                    type: 'lastSuccess',
+                                    claimed: false
+                                };
+                            }
+                        }
+                    }
+                }
+                
+                // 3. 如果都没有找到，返回不符合条件
+                return { 
+                    valid: false, 
+                    message: '❌ 该地址不符合领取条件\n\n可能的原因：\n• 不在当前轮次的持仓前20中\n• 不是当前轮次的最后大额买入地址\n• 当前轮次数据尚未生成' 
+                };
+                
+            } catch (error) {
+                console.error('地址验证失败:', error);
+                return { 
+                    valid: false, 
+                    message: '❌ 验证过程中发生错误，请稍后重试' 
+                };
             }
-            
-            // 检查是否是最后成功地址
-            const lastSuccessAddress = gameData.lastBigBuyAddress || rewardData.lastSuccessAddress;
-            console.log('最后成功地址:', lastSuccessAddress);
-            
-            if (lastSuccessAddress === address.trim()) {
-                return { valid: true, message: '✅ 该地址是最后倒计时地址，可领取奖励！', type: 'lastSuccess' };
-            }
-            
-            return { valid: false, message: '❌ 该地址不符合领取条件' };
         }
 
         // 领取前20名奖励（积分版）
@@ -2728,40 +2842,60 @@
             try {
                 console.log('验证前20持有者资格:', walletAddress);
                 
-                // 检查是否有持仓数据
-                if (!window.solanaTracker || !window.solanaTracker.currentHolderRewardRoundId) {
+                // 直接获取数据库中的所有持仓轮次
+                const holderRoundsRef = firebase.database().ref('holderRewardRounds');
+                const holderRoundsSnap = await holderRoundsRef.once('value');
+                const holderRounds = holderRoundsSnap.val();
+                
+                if (!holderRounds) {
                     return {
                         eligible: false,
-                        reason: '暂无持仓奖励轮次数据，请等待游戏开始'
+                        reason: '数据库中没有持仓轮次数据'
                     };
                 }
                 
-                // 获取当前持仓奖励轮次数据
-                const roundId = window.solanaTracker.currentHolderRewardRoundId;
-                const roundRef = firebase.database().ref(`holderRewardRounds/${roundId}`);
-                const roundSnap = await roundRef.once('value');
-                const roundData = roundSnap.val();
+                // 遍历所有轮次，检查是否在任何轮次中
+                const roundIds = Object.keys(holderRounds);
+                console.log('数据库中的轮次ID列表:', roundIds);
                 
-                if (!roundData || !roundData.top20Holders) {
-                    return {
-                        eligible: false,
-                        reason: '持仓数据不存在或无效'
-                    };
+                for (const roundId of roundIds) {
+                    const roundData = holderRounds[roundId];
+                    console.log(`检查轮次 ${roundId}:`, roundData);
+                    
+                    if (roundData && roundData.top20Holders) {
+                        const isTop20 = roundData.top20Holders.some(holder => 
+                            holder.address === walletAddress
+                        );
+                        
+                        console.log(`轮次 ${roundId} 中是否在前20:`, isTop20);
+                        
+                        if (isTop20) {
+                            // 检查是否已经领取过这个轮次的奖励
+                            const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                            const claimedSnap = await claimedRef.once('value');
+                            const hasClaimed = claimedSnap.exists();
+                            
+                            console.log(`轮次 ${roundId} 是否已领取:`, hasClaimed);
+                            
+                            if (!hasClaimed) {
+                                // 设置当前轮次ID，供后续使用
+                                if (!window.solanaTracker) window.solanaTracker = {};
+                                window.solanaTracker.currentHolderRewardRoundId = roundId;
+                                
+                                return { 
+                                    eligible: true,
+                                    roundId: roundId
+                                };
+                            }
+                        }
+                    }
                 }
                 
-                // 检查是否在持仓前20中
-                const isTop20 = roundData.top20Holders.some(holder => 
-                    holder.address === walletAddress
-                );
-                
-                if (!isTop20) {
-                    return {
-                        eligible: false,
-                        reason: '您的地址不在持仓前20持有者中'
-                    };
-                }
-                
-                return { eligible: true };
+                // 如果所有轮次都检查完了，说明没有资格
+                return {
+                    eligible: false,
+                    reason: `您的地址不在任何持仓前20持有者中，或已领取过所有轮次的奖励\n\n检查的轮次: ${roundIds.join(', ')}`
+                };
                 
             } catch (error) {
                 console.error('验证前20持有者资格失败:', error);
@@ -2775,12 +2909,33 @@
         // 检查前20持有者是否已领取
         async function checkTop20Claimed(walletAddress) {
             try {
-                const roundId = window.solanaTracker?.currentHolderRewardRoundId;
-                if (!roundId) return false;
+                // 检查所有轮次是否已领取
+                const holderRoundsRef = firebase.database().ref('holderRewardRounds');
+                const holderRoundsSnap = await holderRoundsRef.once('value');
+                const holderRounds = holderRoundsSnap.val();
                 
-                const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
-                const claimedSnap = await claimedRef.once('value');
-                return claimedSnap.exists();
+                if (!holderRounds) return false;
+                
+                const roundIds = Object.keys(holderRounds);
+                
+                for (const roundId of roundIds) {
+                    const roundData = holderRounds[roundId];
+                    if (roundData && roundData.top20Holders) {
+                        const isTop20 = roundData.top20Holders.some(holder => 
+                            holder.address === walletAddress
+                        );
+                        
+                        if (isTop20) {
+                            const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                            const claimedSnap = await claimedRef.once('value');
+                            if (claimedSnap.exists()) {
+                                return true; // 已领取过某个轮次
+                            }
+                        }
+                    }
+                }
+                
+                return false; // 没有领取过任何轮次
                 
             } catch (error) {
                 console.error('检查前20持有者领取状态失败:', error);
@@ -2792,7 +2947,10 @@
         async function recordTop20Claim(walletAddress) {
             try {
                 const roundId = window.solanaTracker?.currentHolderRewardRoundId;
-                if (!roundId) return;
+                if (!roundId) {
+                    console.error('没有找到有效的轮次ID');
+                    return;
+                }
                 
                 const claimData = {
                     wallet: walletAddress,
@@ -2805,7 +2963,7 @@
                 const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
                 await claimedRef.set(claimData);
                 
-                console.log('前20持有者领取记录已保存');
+                console.log(`前20持有者领取记录已保存，轮次: ${roundId}`);
                 
             } catch (error) {
                 console.error('记录前20持有者领取失败:', error);
@@ -3018,21 +3176,114 @@
             // 积分兑换代币按钮
             document.getElementById('claimTokenBtn').addEventListener('click', claimTokenHandler);
             
-            // 验证地址按钮
-            document.getElementById('verifyAddressBtn').addEventListener('click', function() {
-                const address = document.getElementById('verifyAddressInput').value.trim();
-                const result = verifyAddress(address);
-                const resultDiv = document.getElementById('verifyResult');
+            // 调试按钮
+            document.getElementById('debugBtn').addEventListener('click', async function() {
+                const debugResult = document.getElementById('debugResult');
+                debugResult.innerHTML = '<span class="text-blue-400">⏳ 调试中...</span>';
                 
-                if (result.valid) {
-                    resultDiv.innerHTML = `<span class="text-green-400">${result.message}</span>`;
-                } else {
-                    resultDiv.innerHTML = `<span class="text-red-400">${result.message}</span>`;
+                try {
+                    const walletAddress = '6btAW2SbJQKtwKRebjUuXA2fPv7MAVYJD1tgCvBx6GB5';
+                    
+                    // 1. 检查所有轮次
+                    const holderRoundsRef = firebase.database().ref('holderRewardRounds');
+                    const holderRoundsSnap = await holderRoundsRef.once('value');
+                    const holderRounds = holderRoundsSnap.val();
+                    
+                    let debugInfo = '<div class="space-y-2">';
+                    debugInfo += '<div><strong>📊 数据库轮次列表:</strong></div>';
+                    
+                    if (holderRounds) {
+                        const roundIds = Object.keys(holderRounds);
+                        debugInfo += `<div>• 总轮次数: ${roundIds.length}</div>`;
+                        debugInfo += `<div>• 轮次ID列表: ${roundIds.join(', ')}</div>`;
+                        
+                        // 2. 检查每个轮次
+                        for (const roundId of roundIds) {
+                            const roundData = holderRounds[roundId];
+                            const isInTop20 = roundData.top20Holders.some(h => h.address === walletAddress);
+                            debugInfo += `<div>• 轮次 ${roundId}: ${isInTop20 ? '✅ 在列表中' : '❌ 不在列表'}</div>`;
+                        }
+                        
+                        // 3. 检查前端轮次ID
+                        debugInfo += '<div><strong>🔍 前端状态:</strong></div>';
+                        debugInfo += `<div>• solanaTracker存在: ${!!window.solanaTracker}</div>`;
+                        if (window.solanaTracker) {
+                            debugInfo += `<div>• currentHolderRewardRoundId: ${window.solanaTracker.currentHolderRewardRoundId || 'undefined'}</div>`;
+                            debugInfo += `<div>• currentRoundId: ${window.solanaTracker.currentRoundId || 'undefined'}</div>`;
+                        }
+                        
+                        // 4. 测试验证函数
+                        debugInfo += '<div><strong>🧪 验证测试:</strong></div>';
+                        const testResult = await validateTop20Eligibility(walletAddress);
+                        debugInfo += `<div>• 验证结果: ${testResult.eligible ? '✅ 有资格' : '❌ 无资格'}</div>`;
+                        if (!testResult.eligible) {
+                            debugInfo += `<div>• 原因: ${testResult.reason}</div>`;
+                        }
+                        
+                    } else {
+                        debugInfo += '<div>❌ 数据库中没有持仓轮次数据</div>';
+                    }
+                    
+                    debugInfo += '</div>';
+                    debugResult.innerHTML = debugInfo;
+                    
+                } catch (error) {
+                    debugResult.innerHTML = `<span class="text-red-400">❌ 调试失败: ${error.message}</span>`;
+                }
+            });
+            
+            // 验证地址按钮
+            document.getElementById('verifyAddressBtn').addEventListener('click', async function() {
+                const address = document.getElementById('verifyAddressInput').value.trim();
+                const resultDiv = document.getElementById('verifyResult');
+                const verifyBtn = document.getElementById('verifyAddressBtn');
+                
+                // 显示加载状态
+                resultDiv.innerHTML = '<span class="text-blue-400">⏳ 验证中...</span>';
+                verifyBtn.disabled = true;
+                verifyBtn.innerHTML = '<span class="text-white">⏳ 验证中...</span>';
+                
+                try {
+                    const result = await verifyAddress(address);
+                    
+                    if (result.valid) {
+                        if (result.claimed) {
+                            resultDiv.innerHTML = `<span class="text-yellow-400">${result.message}</span>`;
+                        } else {
+                            resultDiv.innerHTML = `<span class="text-green-400">${result.message}</span>`;
+                        }
+                    } else {
+                        resultDiv.innerHTML = `<span class="text-red-400">${result.message}</span>`;
+                    }
+                } catch (error) {
+                    console.error('地址验证失败:', error);
+                    resultDiv.innerHTML = '<span class="text-red-400">❌ 验证失败，请重试</span>';
+                } finally {
+                    // 恢复按钮状态
+                    verifyBtn.disabled = false;
+                    verifyBtn.innerHTML = '<span class="text-white">🔍 验证地址</span>';
                 }
             });
             
             // 页面加载时更新积分显示
             setTimeout(updateScoreDisplay, 1000);
+            
+            // 监听钱包连接状态变化，自动填充地址
+            if (window.walletManager) {
+                // 初始填充
+                setTimeout(() => {
+                    const walletAddress = window.walletManager.currentWallet?.address || 
+                                        window.walletManager.currentWallet?.publicKey || 
+                                        String(window.walletManager.currentWallet || '');
+                    
+                    if (walletAddress && walletAddress !== 'undefined' && walletAddress !== 'null') {
+                        const verifyInput = document.getElementById('verifyAddressInput');
+                        if (verifyInput) {
+                            verifyInput.value = walletAddress;
+                        }
+                    }
+                }, 2000);
+            }
         });
     </script>
 </body>
