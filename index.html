@@ -12,6 +12,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     
+    <!-- 白皮书相关脚本 -->
+    <script src="whitepaper-modal.js"></script>
+    
     <!-- 配置Tailwind自定义颜色和字体 -->
     <script>
         tailwind.config = {
@@ -3307,6 +3310,16 @@
         
         // 监听奖励页面按钮事件
         document.addEventListener('DOMContentLoaded', function() {
+            // 白皮书按钮点击事件
+            document.getElementById('whitepaperBtn').addEventListener('click', function() {
+                if (window.showWhitepaper) {
+                    window.showWhitepaper();
+                } else {
+                    console.error('白皮书功能未加载');
+                    alert('白皮书功能正在加载中，请稍后再试');
+                }
+            });
+            
             // 领取奖励按钮点击事件
             document.getElementById('claimRewardBtn').addEventListener('click', showRewardPage);
             
