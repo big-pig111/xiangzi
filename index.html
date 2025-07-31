@@ -2305,6 +2305,34 @@
             }
         }
 
+        // 将轮次ID转换为中文名称
+        function getRoundChineseName(roundId) {
+            if (!roundId) return '';
+            
+            // 提取轮次编号
+            const match = roundId.match(/(\d+)/);
+            if (match) {
+                const roundNumber = parseInt(match[1]);
+                const chineseNumbers = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+                
+                if (roundNumber <= 10) {
+                    return `第${chineseNumbers[roundNumber]}轮`;
+                } else if (roundNumber <= 99) {
+                    const tens = Math.floor(roundNumber / 10);
+                    const ones = roundNumber % 10;
+                    if (tens === 1) {
+                        return ones === 0 ? '第十轮' : `第十${chineseNumbers[ones]}轮`;
+                    } else {
+                        return ones === 0 ? `第${chineseNumbers[tens]}十轮` : `第${chineseNumbers[tens]}十${chineseNumbers[ones]}轮`;
+                    }
+                } else {
+                    return `第${roundNumber}轮`;
+                }
+            }
+            
+            return `轮次 ${roundId}`;
+        }
+        
         // 更新轮次选择器
         async function updateRoundSelector(walletAddress) {
             try {
@@ -2321,7 +2349,7 @@
                 eligibleRounds.forEach(round => {
                     const option = document.createElement('option');
                     option.value = round.roundId;
-                    option.textContent = `轮次 ${round.roundId} (可领取)`;
+                    option.textContent = `${getRoundChineseName(round.roundId)} (可领取)`;
                     roundSelector.appendChild(option);
                 });
                 
@@ -2423,11 +2451,11 @@
                 }
                 
                 if (top20Claimed) {
-                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">✅ 已领取轮次 ${top20Eligibility.roundId} 的前20持有者奖励</span>`;
+                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">✅ 已领取${getRoundChineseName(top20Eligibility.roundId)}的前20持有者奖励</span>`;
                     document.getElementById('claimTop20Btn').disabled = true;
                     document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">✅ 已领取</span>';
                 } else if (top20Eligibility.eligible) {
-                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">🎉 您有资格领取轮次 ${top20Eligibility.roundId} 的前20持有者奖励！</span>`;
+                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">🎉 您有资格领取${getRoundChineseName(top20Eligibility.roundId)}的前20持有者奖励！</span>`;
                     document.getElementById('claimTop20Btn').disabled = false;
                     document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">🏆 领取前20名奖励</span>';
                 } else {
@@ -2438,7 +2466,7 @@
                     // 检查是否有其他轮次可以领取
                     const allRoundsEligibility = await checkAllRoundsEligibility(walletAddress);
                     if (allRoundsEligibility.length > 0) {
-                        const roundList = allRoundsEligibility.map(round => `轮次 ${round.roundId}`).join(', ');
+                        const roundList = allRoundsEligibility.map(round => getRoundChineseName(round.roundId)).join(', ');
                         document.getElementById('top20Status').innerHTML += `<br><span class="text-blue-400">💡 提示：您在以下轮次中有资格：${roundList}</span>`;
                     }
                 }
@@ -2655,7 +2683,7 @@
                 // 检查是否已经领取过当前轮次的奖励
                 const hasClaimed = await checkTop20Claimed(walletAddress, isTop20.roundId);
                 if (hasClaimed) {
-                    alert(`❌ 您已经领取过轮次 ${isTop20.roundId} 的前20持有者奖励，无法重复领取！`);
+                    alert(`❌ 您已经领取过${getRoundChineseName(isTop20.roundId)}的前20持有者奖励，无法重复领取！`);
                     return;
                 }
                 
@@ -2676,7 +2704,7 @@
                 await recordTop20Claim(walletAddress, isTop20.roundId);
                 
                 // 显示成功消息
-                alert(`🏆 轮次 ${isTop20.roundId} 持仓前20持有者奖励领取成功！\n获得 3000 积分\n当前总积分: ${newScore}\n\n您可以使用积分兑换代币！`);
+                alert(`🏆 ${getRoundChineseName(isTop20.roundId)}持仓前20持有者奖励领取成功！\n获得 3000 积分\n当前总积分: ${newScore}\n\n您可以使用积分兑换代币！`);
                 
                 // 禁用按钮并更新状态
                 document.getElementById('claimTop20Btn').disabled = true;
@@ -2798,7 +2826,7 @@
                             html += `
                                 <div class="border-b border-gray-500 pb-3 mb-3 ${index === 0 ? 'border-t border-gray-500 pt-3' : ''}">
                                     <div class="flex justify-between items-start mb-2">
-                                        <div class="font-bold text-memeYellow">持仓轮次 ${round.roundId}</div>
+                                        <div class="font-bold text-memeYellow">${getRoundChineseName(round.roundId)}</div>
                                         <div class="text-xs text-gray-400">${roundDate}</div>
                                     </div>
                                     
@@ -2851,7 +2879,7 @@
                             html += `
                                 <div class="border-b border-gray-500 pb-3 mb-3 ${index === 0 ? 'border-t border-gray-500 pt-3' : ''}">
                                     <div class="flex justify-between items-start mb-2">
-                                        <div class="font-bold text-memeYellow">倒计时轮次 ${round.roundId}</div>
+                                        <div class="font-bold text-memeYellow">${getRoundChineseName(round.roundId)}</div>
                                         <div class="text-xs text-gray-400">${roundDate}</div>
                                     </div>
                                     
