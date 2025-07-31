@@ -3197,12 +3197,48 @@
                         debugInfo += `<div>• 总轮次数: ${roundIds.length}</div>`;
                         debugInfo += `<div>• 轮次ID列表: ${roundIds.join(', ')}</div>`;
                         
-                        // 2. 检查每个轮次
+                        // 2. 详细检查每个轮次
+                        debugInfo += '<div><strong>🔍 详细轮次检查:</strong></div>';
+                        let foundInAnyRound = false;
+                        
                         for (const roundId of roundIds) {
                             const roundData = holderRounds[roundId];
-                            const isInTop20 = roundData.top20Holders.some(h => h.address === walletAddress);
-                            debugInfo += `<div>• 轮次 ${roundId}: ${isInTop20 ? '✅ 在列表中' : '❌ 不在列表'}</div>`;
+                            debugInfo += `<div class="mt-2 p-2 bg-gray-800 rounded">`;
+                            debugInfo += `<div><strong>轮次: ${roundId}</strong></div>`;
+                            
+                            if (roundData && roundData.top20Holders) {
+                                debugInfo += `<div>• 前20持有者数量: ${roundData.top20Holders.length}</div>`;
+                                
+                                // 检查是否包含目标地址
+                                const isInTop20 = roundData.top20Holders.some(h => h.address === walletAddress);
+                                debugInfo += `<div>• 包含目标地址: ${isInTop20 ? '✅ 是' : '❌ 否'}</div>`;
+                                
+                                if (isInTop20) {
+                                    foundInAnyRound = true;
+                                    const holder = roundData.top20Holders.find(h => h.address === walletAddress);
+                                    debugInfo += `<div>• 地址详情: ${JSON.stringify(holder)}</div>`;
+                                    
+                                    // 检查是否已领取
+                                    const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                                    const claimedSnap = await claimedRef.once('value');
+                                    const hasClaimed = claimedSnap.exists();
+                                    debugInfo += `<div>• 是否已领取: ${hasClaimed ? '✅ 已领取' : '❌ 未领取'}</div>`;
+                                }
+                                
+                                // 显示前3个地址作为示例
+                                debugInfo += `<div>• 前3个地址示例:</div>`;
+                                roundData.top20Holders.slice(0, 3).forEach((holder, index) => {
+                                    debugInfo += `<div class="ml-4">${index + 1}. ${holder.address}</div>`;
+                                });
+                            } else {
+                                debugInfo += `<div>❌ 轮次数据无效或缺少top20Holders</div>`;
+                            }
+                            
+                            debugInfo += `</div>`;
                         }
+                        
+                        debugInfo += `<div><strong>📋 总结:</strong></div>`;
+                        debugInfo += `<div>• 在任意轮次中找到地址: ${foundInAnyRound ? '✅ 是' : '❌ 否'}</div>`;
                         
                         // 3. 检查前端轮次ID
                         debugInfo += '<div><strong>🔍 前端状态:</strong></div>';
