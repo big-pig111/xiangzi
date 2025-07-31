@@ -2459,20 +2459,38 @@
                 
                 console.log('直接 HTTP 调用 Firebase Functions，最终参数:', requestData);
                 
+                // 尝试两种可能的请求体格式
+                const requestBodyWrapped = {
+                    data: requestData
+                };
+                const requestBodyDirect = requestData;
+                
+                const jsonStringWrapped = JSON.stringify(requestBodyWrapped);
+                const jsonStringDirect = JSON.stringify(requestBodyDirect);
+                
+                // 首先尝试直接发送参数（常见的Firebase Functions格式）
+                const jsonString = jsonStringDirect;
+                
+                console.log('完整请求体对象:', requestBodyDirect);
+                console.log('JSON字符串:', jsonString);
+                
                 // 添加最终参数的明显提示（只在claimTop20Reward中）
                 alert(`即将发送给Firebase的参数：
 钱包地址: ${requestData.wallet}
 奖励类型: ${requestData.rewardType}
-轮次ID: ${requestData.roundId}`);
+轮次ID: ${requestData.roundId}
+
+直接格式JSON: ${jsonStringDirect}
+包装格式JSON: ${jsonStringWrapped}
+
+当前使用: 直接格式`);
                 
                 const response = await fetch('https://us-central1-chat-294cc.cloudfunctions.net/claimGameReward', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        data: requestData
-                    })
+                    body: jsonString
                 });
                 
                 if (!response.ok) {
