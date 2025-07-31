@@ -296,6 +296,12 @@
                                 <span class="text-yellow-400">⏳ 等待持仓数据...</span>
                             </div>
                         </div>
+                        <div class="bg-gray-600 p-3 rounded mb-3">
+                            <div class="text-memePink font-bold mb-2">选择轮次：</div>
+                            <select id="roundSelector" class="w-full p-2 bg-gray-700 border border-gray-500 rounded text-white text-sm">
+                                <option value="">自动选择最新轮次</option>
+                            </select>
+                        </div>
                         <button id="claimTop20Btn" class="w-full bg-memeGreen hover:bg-green-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
                             <span class="text-white">🏆 领取前20名奖励</span>
                         </button>
@@ -2299,6 +2305,40 @@
             }
         }
 
+        // 更新轮次选择器
+        async function updateRoundSelector(walletAddress) {
+            try {
+                const roundSelector = document.getElementById('roundSelector');
+                if (!roundSelector) return;
+                
+                // 清空现有选项
+                roundSelector.innerHTML = '<option value="">自动选择最新轮次</option>';
+                
+                // 获取所有可领取的轮次
+                const eligibleRounds = await checkAllRoundsEligibility(walletAddress);
+                
+                // 添加可领取的轮次选项
+                eligibleRounds.forEach(round => {
+                    const option = document.createElement('option');
+                    option.value = round.roundId;
+                    option.textContent = `轮次 ${round.roundId} (可领取)`;
+                    roundSelector.appendChild(option);
+                });
+                
+                // 如果没有可领取的轮次，显示提示
+                if (eligibleRounds.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = "";
+                    option.textContent = "暂无可领取的轮次";
+                    option.disabled = true;
+                    roundSelector.appendChild(option);
+                }
+                
+            } catch (error) {
+                console.error('更新轮次选择器失败:', error);
+            }
+        }
+        
         // 更新奖励页面数据
         async function updateRewardPageData() {
             
@@ -2344,7 +2384,6 @@
             try {
                 // 验证前20持有者资格
                 let top20Eligibility = await validateTop20Eligibility(walletAddress);
-                let top20Claimed = await checkTop20Claimed(walletAddress);
                 
                 // 如果轮次ID为空，尝试使用最新的轮次ID
                 if (!window.solanaTracker?.currentHolderRewardRoundId) {
@@ -2363,11 +2402,9 @@
                                 
                                 // 重新验证
                                 const retryEligibility = await validateTop20Eligibility(walletAddress);
-                                const retryClaimed = await checkTop20Claimed(walletAddress);
                                 
                                 if (retryEligibility.eligible) {
                                     top20Eligibility = retryEligibility;
-                                    top20Claimed = retryClaimed;
                                 }
                             }
                         }
@@ -2376,18 +2413,34 @@
                     }
                 }
                 
+                // 更新轮次选择器
+                await updateRoundSelector(walletAddress);
+                
+                // 检查当前轮次是否已领取
+                let top20Claimed = false;
+                if (top20Eligibility.eligible && top20Eligibility.roundId) {
+                    top20Claimed = await checkTop20Claimed(walletAddress, top20Eligibility.roundId);
+                }
+                
                 if (top20Claimed) {
-                    document.getElementById('top20Status').innerHTML = '<span class="text-green-400">✅ 已领取前20持有者奖励</span>';
+                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">✅ 已领取轮次 ${top20Eligibility.roundId} 的前20持有者奖励</span>`;
                     document.getElementById('claimTop20Btn').disabled = true;
                     document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">✅ 已领取</span>';
                 } else if (top20Eligibility.eligible) {
-                    document.getElementById('top20Status').innerHTML = '<span class="text-green-400">🎉 您有资格领取前20持有者奖励！</span>';
+                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">🎉 您有资格领取轮次 ${top20Eligibility.roundId} 的前20持有者奖励！</span>`;
                     document.getElementById('claimTop20Btn').disabled = false;
                     document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">🏆 领取前20名奖励</span>';
                 } else {
                     document.getElementById('top20Status').innerHTML = `<span class="text-red-400">❌ ${top20Eligibility.reason}</span>`;
                     document.getElementById('claimTop20Btn').disabled = true;
                     document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">❌ 无资格</span>';
+                    
+                    // 检查是否有其他轮次可以领取
+                    const allRoundsEligibility = await checkAllRoundsEligibility(walletAddress);
+                    if (allRoundsEligibility.length > 0) {
+                        const roundList = allRoundsEligibility.map(round => `轮次 ${round.roundId}`).join(', ');
+                        document.getElementById('top20Status').innerHTML += `<br><span class="text-blue-400">💡 提示：您在以下轮次中有资格：${roundList}</span>`;
+                    }
                 }
                 
                 // 验证最后大额买入者资格
@@ -2557,18 +2610,52 @@
             }
             
             try {
+                // 获取用户选择的轮次
+                const roundSelector = document.getElementById('roundSelector');
+                const selectedRoundId = roundSelector ? roundSelector.value : '';
+                
                 // 验证用户是否有资格领取前20持有者奖励
-                // 检查是否在持仓前20中
-                const isTop20 = await validateTop20Eligibility(walletAddress);
-                if (!isTop20.eligible) {
-                    alert(`❌ 您没有资格领取前20持有者奖励：\n${isTop20.reason}`);
-                    return;
+                let isTop20;
+                if (selectedRoundId) {
+                    // 如果用户选择了特定轮次，验证该轮次
+                    const holderRoundsRef = firebase.database().ref(`holderRewardRounds/${selectedRoundId}`);
+                    const holderRoundsSnap = await holderRoundsRef.once('value');
+                    const roundData = holderRoundsSnap.val();
+                    
+                    if (!roundData || !roundData.top20Holders) {
+                        alert('❌ 选择的轮次数据无效！');
+                        return;
+                    }
+                    
+                    const normalizedAddress = String(walletAddress).trim();
+                    const foundHolder = roundData.top20Holders.find(holder => {
+                        const holderAddress = holder.address || holder.wallet || holder.publicKey;
+                        return holderAddress === normalizedAddress;
+                    });
+                    
+                    if (!foundHolder) {
+                        alert('❌ 您在选择的轮次中不在前20持有者中！');
+                        return;
+                    }
+                    
+                    isTop20 = {
+                        eligible: true,
+                        roundId: selectedRoundId,
+                        holder: foundHolder
+                    };
+                } else {
+                    // 使用自动选择逻辑
+                    isTop20 = await validateTop20Eligibility(walletAddress);
+                    if (!isTop20.eligible) {
+                        alert(`❌ 您没有资格领取前20持有者奖励：\n${isTop20.reason}`);
+                        return;
+                    }
                 }
                 
-                // 检查是否已经领取过
-                const hasClaimed = await checkTop20Claimed(walletAddress);
+                // 检查是否已经领取过当前轮次的奖励
+                const hasClaimed = await checkTop20Claimed(walletAddress, isTop20.roundId);
                 if (hasClaimed) {
-                    alert('❌ 您已经领取过前20持有者奖励，无法重复领取！');
+                    alert(`❌ 您已经领取过轮次 ${isTop20.roundId} 的前20持有者奖励，无法重复领取！`);
                     return;
                 }
                 
@@ -2586,10 +2673,10 @@
                 });
                 
                 // 记录领取记录
-                await recordTop20Claim(walletAddress);
+                await recordTop20Claim(walletAddress, isTop20.roundId);
                 
                 // 显示成功消息
-                alert(`🏆 持仓前20持有者奖励领取成功！\n获得 3000 积分\n当前总积分: ${newScore}\n\n您可以使用积分兑换代币！`);
+                alert(`🏆 轮次 ${isTop20.roundId} 持仓前20持有者奖励领取成功！\n获得 3000 积分\n当前总积分: ${newScore}\n\n您可以使用积分兑换代币！`);
                 
                 // 禁用按钮并更新状态
                 document.getElementById('claimTop20Btn').disabled = true;
@@ -2888,16 +2975,42 @@
             }
         }
         
-        // 检查前20持有者是否已领取
-        async function checkTop20Claimed(walletAddress) {
+        // 检查前20持有者是否已领取（检查特定轮次）
+        async function checkTop20Claimed(walletAddress, roundId = null) {
             try {
-                // 检查所有轮次是否已领取
+                // 如果指定了轮次ID，只检查该轮次
+                if (roundId) {
+                    const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                    const claimedSnap = await claimedRef.once('value');
+                    return claimedSnap.exists();
+                }
+                
+                // 如果没有指定轮次ID，检查当前轮次
+                const currentRoundId = window.solanaTracker?.currentHolderRewardRoundId;
+                if (currentRoundId) {
+                    const claimedRef = firebase.database().ref(`claimedRewards/top20/${currentRoundId}/${walletAddress}`);
+                    const claimedSnap = await claimedRef.once('value');
+                    return claimedSnap.exists();
+                }
+                
+                return false;
+                
+            } catch (error) {
+                console.error('检查前20持有者领取状态失败:', error);
+                return false;
+            }
+        }
+        
+        // 检查所有轮次的资格
+        async function checkAllRoundsEligibility(walletAddress) {
+            try {
                 const holderRoundsRef = firebase.database().ref('holderRewardRounds');
                 const holderRoundsSnap = await holderRoundsRef.once('value');
                 const holderRounds = holderRoundsSnap.val();
                 
-                if (!holderRounds) return false;
+                if (!holderRounds) return [];
                 
+                const eligibleRounds = [];
                 const roundIds = Object.keys(holderRounds);
                 
                 for (const roundId of roundIds) {
@@ -2909,40 +3022,50 @@
                         });
                         
                         if (isTop20) {
+                            // 检查是否已领取
                             const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
                             const claimedSnap = await claimedRef.once('value');
-                            if (claimedSnap.exists()) {
-                                return true; // 已领取过某个轮次
+                            const hasClaimed = claimedSnap.exists();
+                            
+                            if (!hasClaimed) {
+                                eligibleRounds.push({
+                                    roundId: roundId,
+                                    holder: roundData.top20Holders.find(holder => {
+                                        const holderAddress = holder.address || holder.wallet || holder.publicKey;
+                                        return holderAddress === walletAddress;
+                                    })
+                                });
                             }
                         }
                     }
                 }
                 
-                return false; // 没有领取过任何轮次
+                return eligibleRounds;
                 
             } catch (error) {
-                console.error('检查前20持有者领取状态失败:', error);
-                return false;
+                console.error('检查所有轮次资格失败:', error);
+                return [];
             }
         }
         
         // 记录前20持有者领取
-        async function recordTop20Claim(walletAddress) {
+        async function recordTop20Claim(walletAddress, roundId = null) {
             try {
-                const roundId = window.solanaTracker?.currentHolderRewardRoundId;
-                if (!roundId) {
+                // 如果没有指定轮次ID，使用当前轮次ID
+                const targetRoundId = roundId || window.solanaTracker?.currentHolderRewardRoundId;
+                if (!targetRoundId) {
                     return;
                 }
                 
                 const claimData = {
                     wallet: walletAddress,
-                    roundId: roundId,
+                    roundId: targetRoundId,
                     rewardType: 'top20',
                     amount: 3000,
                     claimedAt: Date.now()
                 };
                 
-                const claimedRef = firebase.database().ref(`claimedRewards/top20/${roundId}/${walletAddress}`);
+                const claimedRef = firebase.database().ref(`claimedRewards/top20/${targetRoundId}/${walletAddress}`);
                 await claimedRef.set(claimData);
                 
             } catch (error) {
@@ -3167,6 +3290,18 @@
             
             // 积分兑换代币按钮
             document.getElementById('claimTokenBtn').addEventListener('click', claimTokenHandler);
+            
+            // 轮次选择器事件监听器
+            document.getElementById('roundSelector').addEventListener('change', async function() {
+                const selectedRoundId = this.value;
+                if (selectedRoundId && window.walletManager && window.walletManager.isConnected) {
+                    const walletAddress = window.walletManager.getWalletAddress();
+                    if (walletAddress) {
+                        // 更新状态显示
+                        await updateRewardPageData();
+                    }
+                }
+            });
             
 
             
