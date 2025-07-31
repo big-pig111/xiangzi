@@ -346,6 +346,32 @@
                     </div>
                 </div>
                 
+                <!-- 积分兑换区域 -->
+                <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
+                    <div class="flex items-center mb-3">
+                        <span class="text-2xl mr-2">🪙</span>
+                        <h4 class="text-memeYellow font-bold text-lg">积分兑换代币</h4>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <h5 class="text-memePink font-bold mb-2">当前积分状态</h5>
+                            <div id="scoreDetails" class="text-gray-300 text-sm space-y-1">
+                                <div>• 当前积分：<span id="currentScore">0</span></div>
+                                <div>• 可兑换代币：<span id="exchangeableTokens">0</span></div>
+                                <div>• 兑换比例：1积分 = 1代币</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-center">
+                            <button id="claimTokenBtn" class="w-full bg-memeGreen hover:bg-green-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span class="text-white">🪙 兑换代币</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-gray-400 text-xs">
+                        💡 提示：领取游戏奖励后，您将获得积分。使用积分可以兑换真实的代币到您的钱包！
+                    </div>
+                </div>
+                
                 <!-- 奖励详情展示 -->
                 <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
                     <div class="flex items-center mb-3">
@@ -358,7 +384,7 @@
                             <div id="top20Details" class="text-gray-300 text-sm space-y-1">
                                 <div>• 总持有者数量：<span id="totalHolders">-</span></div>
                                 <div>• 前20名数量：<span id="top20Count">20</span></div>
-                                <div>• 每人奖励代币数量：<span id="top20Reward">-</span></div>
+                                <div>• 每人奖励积分：<span id="top20Reward">3000</span></div>
                             </div>
                         </div>
                         <div>
@@ -366,7 +392,7 @@
                             <div id="lastSuccessDetails" class="text-gray-300 text-sm space-y-1">
                                 <div>• 地址：<span id="lastSuccessAddress">-</span></div>
                                 <div>• 买入数量：<span id="lastSuccessAmount">-</span></div>
-                                <div>• 奖励代币数量：<span id="lastSuccessReward">-</span></div>
+                                <div>• 奖励积分：<span id="lastSuccessReward">10000</span></div>
                             </div>
                         </div>
                     </div>
@@ -2260,6 +2286,9 @@
                 await updateRewardPageData(); // 更新奖励数据
                 loadHolderRewardRoundsList(); // 加载持仓奖励历史
                 loadCountdownRewardRoundsList(); // 加载倒计时奖励历史
+                
+                // 更新积分显示
+                await updateScoreDisplay();
             }
         }
         
@@ -2361,32 +2390,20 @@
             return { valid: false, message: '❌ 该地址不符合领取条件' };
         }
 
-        // 领取前20名奖励
+        // 领取前20名奖励（积分版）
         async function claimTop20Reward() {
-            console.log('=== claimTop20Reward 开始调试 ===');
-            console.log('window.walletManager:', !!window.walletManager);
-            console.log('window.walletManager.isConnected:', window.walletManager?.isConnected);
-            console.log('window.walletManager.currentWallet:', window.walletManager?.currentWallet);
+            console.log('=== 开始领取持仓前20持有者奖励（积分版） ===');
             
-            // 添加明显的调试信息
-            alert(`调试信息：
-钱包管理器存在: ${!!window.walletManager}
-钱包已连接: ${window.walletManager?.isConnected}
-当前钱包: ${window.walletManager?.currentWallet}`);
-            
+            // 检查钱包连接状态
             if (!window.walletManager || !window.walletManager.isConnected) {
-                alert('请先连接钱包');
+                alert('请先连接钱包！');
                 return;
             }
             
-            // 正确提取钱包地址 - currentWallet是对象，需要获取其中的地址
+            // 正确提取钱包地址
             let walletAddress = '';
             const walletObj = window.walletManager.currentWallet;
             
-            console.log('钱包对象详情:', walletObj);
-            console.log('钱包对象类型:', typeof walletObj);
-            
-            // 尝试多种可能的属性名来获取地址
             if (walletObj && typeof walletObj === 'object') {
                 walletAddress = walletObj.address || 
                                walletObj.publicKey || 
@@ -2401,203 +2418,59 @@
             console.log('提取到的钱包地址:', walletAddress);
             
             if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
-                alert(`钱包地址提取失败！
-钱包对象: ${JSON.stringify(walletObj)}
-请检查wallet-connect.js中的钱包地址存储方式`);
+                alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
             
             try {
-                console.log('window.solanaTracker存在:', !!window.solanaTracker);
-                console.log('window.solanaTracker完整对象:', window.solanaTracker);
+                // 先给用户添加3000积分（前20持有者奖励）
+                console.log('给用户添加3000积分...');
                 
-                // 获取当前轮次ID（使用最新的持仓奖励轮次）
-                let currentRoundId = window.solanaTracker ? window.solanaTracker.currentHolderRewardRoundId : null;
-                console.log('原始轮次ID:', currentRoundId, '类型:', typeof currentRoundId);
+                // 使用Firebase Realtime Database直接添加积分
+                const userRef = firebase.database().ref(`users/${walletAddress}`);
+                const userSnap = await userRef.once('value');
+                const userData = userSnap.val() || {};
+                const currentScore = parseInt(userData.score || 0);
+                const newScore = currentScore + 3000;
                 
-                // 确保轮次ID是字符串类型
-                currentRoundId = String(currentRoundId || '').trim();
-                console.log('处理后轮次ID:', currentRoundId);
-                
-                console.log('调试 - 持仓奖励轮次ID:', currentRoundId);
-                console.log('调试 - solanaTracker状态:', {
-                    exists: !!window.solanaTracker,
-                    currentRoundId: window.solanaTracker?.currentRoundId,
-                    currentHolderRewardRoundId: window.solanaTracker?.currentHolderRewardRoundId,
-                    isMonitoring: window.solanaTracker?.isMonitoring
+                // 更新用户积分
+                await userRef.update({
+                    score: newScore,
+                    lastUpdated: Date.now()
                 });
                 
-                // 如果轮次ID无效，尝试生成一个临时ID用于测试
-                if (!currentRoundId || currentRoundId === 'null' || currentRoundId === 'undefined') {
-                    console.warn('轮次ID无效，生成临时ID用于测试');
-                    currentRoundId = 'temp-' + Date.now();
-                    console.log('临时轮次ID:', currentRoundId);
-                }
+                console.log(`积分更新成功: ${currentScore} -> ${newScore}`);
                 
-                // 确保所有参数都是安全的字符串
-                const requestData = {
-                    wallet: walletAddress,
-                    rewardType: 'top20',
-                    roundId: currentRoundId
-                };
+                // 显示成功消息
+                alert(`🏆 持仓前20持有者奖励领取成功！\n获得 3000 积分\n当前总积分: ${newScore}\n\n您可以使用积分兑换代币！`);
                 
-                // 验证所有参数都不是undefined
-                console.log('=== 参数验证 ===');
-                console.log('wallet:', requestData.wallet, '类型:', typeof requestData.wallet);
-                console.log('rewardType:', requestData.rewardType, '类型:', typeof requestData.rewardType);
-                console.log('roundId:', requestData.roundId, '类型:', typeof requestData.roundId);
+                // 禁用按钮并更新状态
+                document.getElementById('claimTop20Btn').disabled = true;
+                document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">✅ 已领取</span>';
                 
-                // 最终检查，确保没有undefined值
-                Object.keys(requestData).forEach(key => {
-                    if (requestData[key] === undefined || requestData[key] === 'undefined') {
-                        console.error(`参数 ${key} 是undefined，将使用默认值`);
-                        if (key === 'wallet') requestData[key] = 'test-wallet';
-                        if (key === 'rewardType') requestData[key] = 'top20';
-                        if (key === 'roundId') requestData[key] = 'test-round-' + Date.now();
-                    }
-                });
+                // 刷新历史获奖轮次列表
+                loadHolderRewardRoundsList();
                 
-                console.log('=== 最终调用前调试 ===');
-                console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
-                console.log('参数详细检查:');
-                console.log('  - wallet:', `"${requestData.wallet}"`, '长度:', requestData.wallet?.length, '类型:', typeof requestData.wallet);
-                console.log('  - rewardType:', `"${requestData.rewardType}"`, '类型:', typeof requestData.rewardType);
-                console.log('  - roundId:', `"${requestData.roundId}"`, '类型:', typeof requestData.roundId);
-                console.log('使用的functions实例:', !!functions);
-                console.log('functions实例类型:', typeof functions);
-                
-                // 验证没有空值
-                Object.keys(requestData).forEach(key => {
-                    if (!requestData[key] || requestData[key] === '' || requestData[key] === 'undefined') {
-                        console.error(`❌ 参数 ${key} 为空或无效:`, requestData[key]);
-                    } else {
-                        console.log(`✅ 参数 ${key} 有效:`, requestData[key]);
-                    }
-                });
-                
-                // 临时强制设置钱包地址进行测试
-                if (!requestData.wallet || requestData.wallet === '' || requestData.wallet.length < 40) {
-                    console.warn('⚠️ 钱包地址无效，使用测试地址');
-                    console.warn('原地址:', requestData.wallet, '长度:', requestData.wallet?.length);
-                    requestData.wallet = '6btAW2SbJQKtwKRebiUuXA2fPv7MAVYJD1tgCvBx6GB5'; // 临时测试地址
-                    console.warn('新地址:', requestData.wallet, '长度:', requestData.wallet.length);
-                }
-                
-                console.log('最终发送的参数:', requestData);
-                
-                // 添加最终参数的明显提示
-                alert(`使用Firebase SDK调用Callable Function：
-钱包地址: ${requestData.wallet}
-地址长度: ${requestData.wallet?.length}
-奖励类型: ${requestData.rewardType}
-轮次ID: ${requestData.roundId}
-
-使用region: us-central1
-请查看控制台获取详细调试信息`);
-                
-                // 使用Firebase Functions SDK调用Callable Function（使用指定region的实例）
-                // 注意：Callable Functions要求参数必须是单个对象，不需要再包装在data中
-                console.log('调用前最终检查 - requestData:', JSON.stringify(requestData, null, 2));
-                
-                // 强制显示调试信息
-                const testParams = {
-                    wallet: '6btAW2SbJQKtwKRebiUuXA2fPv7MAVYJD1tgCvBx6GB5',
-                    rewardType: 'top20',
-                    roundId: 'test-123'
-                };
-                
-                alert(`🔍 调试信息：
-                
-测试参数:
-- wallet: ${testParams.wallet}
-- rewardType: ${testParams.rewardType}  
-- roundId: ${testParams.roundId}
-
-functions对象存在: ${!!functions}
-functions类型: ${typeof functions}
-
-即将调用Firebase Function...`);
-                
-                console.log('=== 使用成功版本的调用模式 ===');
-                console.log('requestData:', requestData);
-                
-                // 使用和成功版本完全一样的调用方式
-                const claimGameReward = firebase.functions().httpsCallable('claimGameReward');
-                console.log('Firebase Function创建成功');
-                
-                alert('使用firebase.functions()调用...');
-                
-                // 使用和成功版本完全一样的简洁调用
-                const result = await claimGameReward(requestData);
-                console.log('Firebase Function调用成功:', result);
-                
-                // Callable Function直接返回结果，不需要检查response.ok
-                console.log('Callable Function返回结果:', result);
-                
-                if (result.data.success) {
-                    alert(`🏆 持仓前20持有者奖励领取成功！\n获得 ${result.data.amount} TOKENS\n交易哈希: ${result.data.txHash}`);
-                    
-                    // 禁用按钮并更新状态
-                    document.getElementById('claimTop20Btn').disabled = true;
-                    document.getElementById('claimTop20Btn').innerHTML = '<span class="text-white">✅ 已领取</span>';
-                    
-                    // 刷新历史获奖轮次列表
-                    loadHolderRewardRoundsList();
-                } else {
-                    alert('奖励领取失败: ' + result.data.message);
-                }
             } catch (error) {
                 console.error('领取奖励失败:', error);
-                console.error('错误详情:', {
-                    message: error.message,
-                    code: error.code,
-                    details: error.details,
-                    stack: error.stack
-                });
-                
-                // 根据错误信息显示不同的提示
-                if (error.message && error.message.includes('不在持仓前20持有者中')) {
-                    alert('❌ 您的地址不在持仓前20持有者中，无法领取此奖励');
-                } else if (error.message && error.message.includes('已领取')) {
-                    alert('❌ 该轮次奖励已领取，无法重复领取');
-                } else if (error.message && error.message.includes('轮次数据不存在')) {
-                    alert('❌ 轮次数据不存在，请等待游戏数据更新');
-                } else if (error.code === 'functions/unavailable') {
-                    alert('❌ Firebase Functions未部署或不可用，请联系管理员');
-                } else if (error.message && error.message.includes('hasOwnProperty')) {
-                    alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
-                } else if (error.message && error.message.includes('HTTP 500')) {
-                    alert('❌ 服务器内部错误：\n• Firebase Functions可能未正确部署\n• 检查云函数日志获取详细信息\n• 联系管理员检查后端服务');
-                } else if (error.message && error.message.includes('HTTP 404')) {
-                    alert('❌ 云函数未找到：\n• claimGameReward函数可能未部署\n• 检查函数名称和地区设置');
-                } else if (error.message && error.message.includes('HTTP 403')) {
-                    alert('❌ 权限被拒绝：\n• 检查Firebase安全规则\n• 确认函数访问权限设置');
-                } else {
-                    alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
-                }
+                alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
             }
         }
 
-        // 领取最后倒计时奖励
+        // 领取最后倒计时奖励（积分版）
         async function claimLastSuccessReward() {
-            console.log('=== claimLastSuccessReward 开始调试 ===');
-            console.log('window.walletManager:', !!window.walletManager);
-            console.log('window.walletManager.isConnected:', window.walletManager?.isConnected);
-            console.log('window.walletManager.currentWallet:', window.walletManager?.currentWallet);
+            console.log('=== 开始领取最后倒计时奖励（积分版） ===');
             
+            // 检查钱包连接状态
             if (!window.walletManager || !window.walletManager.isConnected) {
-                alert('请先连接钱包');
+                alert('请先连接钱包！');
                 return;
             }
             
-            // 正确提取钱包地址 - currentWallet是对象，需要获取其中的地址
+            // 正确提取钱包地址
             let walletAddress = '';
             const walletObj = window.walletManager.currentWallet;
             
-            console.log('钱包对象详情:', walletObj);
-            console.log('钱包对象类型:', typeof walletObj);
-            
-            // 尝试多种可能的属性名来获取地址
             if (walletObj && typeof walletObj === 'object') {
                 walletAddress = walletObj.address || 
                                walletObj.publicKey || 
@@ -2612,115 +2485,42 @@ functions类型: ${typeof functions}
             console.log('提取到的钱包地址:', walletAddress);
             
             if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
-                alert(`钱包地址提取失败！
-钱包对象: ${JSON.stringify(walletObj)}
-请检查wallet-connect.js中的钱包地址存储方式`);
+                alert('钱包地址提取失败，请重新连接钱包！');
                 return;
             }
             
             try {
-                console.log('window.solanaTracker存在:', !!window.solanaTracker);
+                // 给用户添加10000积分（最后倒计时奖励）
+                console.log('给用户添加10000积分...');
                 
-                // 获取当前轮次ID（使用最新的倒计时奖励轮次）
-                let currentRoundId = window.solanaTracker ? window.solanaTracker.currentRoundId : null;
-                console.log('原始轮次ID:', currentRoundId, '类型:', typeof currentRoundId);
+                // 使用Firebase Realtime Database直接添加积分
+                const userRef = firebase.database().ref(`users/${walletAddress}`);
+                const userSnap = await userRef.once('value');
+                const userData = userSnap.val() || {};
+                const currentScore = parseInt(userData.score || 0);
+                const newScore = currentScore + 10000;
                 
-                // 确保轮次ID是字符串类型
-                currentRoundId = String(currentRoundId || '').trim();
-                console.log('处理后轮次ID:', currentRoundId);
-                
-                console.log('调试 - 倒计时奖励轮次ID:', currentRoundId);
-                console.log('调试 - solanaTracker状态:', {
-                    exists: !!window.solanaTracker,
-                    currentRoundId: window.solanaTracker?.currentRoundId,
-                    currentHolderRewardRoundId: window.solanaTracker?.currentHolderRewardRoundId,
-                    isMonitoring: window.solanaTracker?.isMonitoring
+                // 更新用户积分
+                await userRef.update({
+                    score: newScore,
+                    lastUpdated: Date.now()
                 });
                 
-                // 如果轮次ID无效，尝试生成一个临时ID用于测试
-                if (!currentRoundId || currentRoundId === 'null' || currentRoundId === 'undefined') {
-                    console.warn('轮次ID无效，生成临时ID用于测试');
-                    currentRoundId = 'temp-countdown-' + Date.now();
-                    console.log('临时轮次ID:', currentRoundId);
-                }
+                console.log(`积分更新成功: ${currentScore} -> ${newScore}`);
                 
-                // 确保所有参数都是安全的字符串
-                const requestData = {
-                    wallet: walletAddress,
-                    rewardType: 'countdown',
-                    roundId: currentRoundId
-                };
+                // 显示成功消息
+                alert(`💰 最后倒计时奖励领取成功！\n获得 10000 积分\n当前总积分: ${newScore}\n\n您可以使用积分兑换代币！`);
                 
-                // 验证所有参数都不是undefined
-                console.log('=== 参数验证 ===');
-                console.log('wallet:', requestData.wallet, '类型:', typeof requestData.wallet);
-                console.log('rewardType:', requestData.rewardType, '类型:', typeof requestData.rewardType);
-                console.log('roundId:', requestData.roundId, '类型:', typeof requestData.roundId);
+                // 禁用按钮并更新状态
+                document.getElementById('claimLastSuccessBtn').disabled = true;
+                document.getElementById('claimLastSuccessBtn').innerHTML = '<span class="text-white">✅ 已领取</span>';
                 
-                // 最终检查，确保没有undefined值
-                Object.keys(requestData).forEach(key => {
-                    if (requestData[key] === undefined || requestData[key] === 'undefined') {
-                        console.error(`参数 ${key} 是undefined，将使用默认值`);
-                        if (key === 'wallet') requestData[key] = 'test-wallet';
-                        if (key === 'rewardType') requestData[key] = 'countdown';
-                        if (key === 'roundId') requestData[key] = 'test-countdown-' + Date.now();
-                    }
-                });
+                // 刷新历史获奖轮次列表
+                loadCountdownRewardRoundsList();
                 
-                console.log('=== claimLastSuccessReward最终调用前调试 ===');
-                console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
-                console.log('调用前最终检查 - requestData:', JSON.stringify(requestData, null, 2));
-                
-                // 使用和成功版本完全一样的调用方式
-                const claimGameReward = firebase.functions().httpsCallable('claimGameReward');
-                console.log('开始调用Firebase Function...');
-                const result = await claimGameReward(requestData);
-                console.log('Firebase Function调用结果:', result);
-                
-                // Callable Function直接返回结果
-                console.log('Callable Function返回结果:', result);
-                
-                if (result.data.success) {
-                    alert(`💰 最后倒计时奖励领取成功！\n获得 ${result.data.amount} TOKENS\n交易哈希: ${result.data.txHash}`);
-                    
-                    // 禁用按钮并更新状态
-                    document.getElementById('claimLastSuccessBtn').disabled = true;
-                    document.getElementById('claimLastSuccessBtn').innerHTML = '<span class="text-white">✅ 已领取</span>';
-                    
-                    // 刷新历史获奖轮次列表
-                    loadCountdownRewardRoundsList();
-                } else {
-                    alert('奖励领取失败: ' + result.data.message);
-                }
             } catch (error) {
                 console.error('领取奖励失败:', error);
-                console.error('错误详情:', {
-                    message: error.message,
-                    code: error.code,
-                    details: error.details,
-                    stack: error.stack
-                });
-                
-                // 根据错误信息显示不同的提示
-                if (error.message && error.message.includes('不是最后倒计时地址')) {
-                    alert('❌ 您的地址不是最后倒计时地址，无法领取此奖励');
-                } else if (error.message && error.message.includes('已领取')) {
-                    alert('❌ 该轮次奖励已领取，无法重复领取');
-                } else if (error.message && error.message.includes('轮次数据不存在')) {
-                    alert('❌ 轮次数据不存在，请等待游戏数据更新');
-                } else if (error.code === 'functions/unavailable') {
-                    alert('❌ Firebase Functions未部署或不可用，请联系管理员');
-                } else if (error.message && error.message.includes('hasOwnProperty')) {
-                    alert('❌ Firebase Functions序列化错误，请重新部署函数后重试');
-                } else if (error.message && error.message.includes('HTTP 500')) {
-                    alert('❌ 服务器内部错误：\n• Firebase Functions可能未正确部署\n• 检查云函数日志获取详细信息\n• 联系管理员检查后端服务');
-                } else if (error.message && error.message.includes('HTTP 404')) {
-                    alert('❌ 云函数未找到：\n• claimGameReward函数可能未部署\n• 检查函数名称和地区设置');
-                } else if (error.message && error.message.includes('HTTP 403')) {
-                    alert('❌ 权限被拒绝：\n• 检查Firebase安全规则\n• 确认函数访问权限设置');
-                } else {
-                    alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
-                }
+                alert('❌ 奖励领取失败: ' + (error.message || '未知错误'));
             }
         }
         
@@ -2835,6 +2635,113 @@ functions类型: ${typeof functions}
 
         // 监控功能已移至管理面板
 
+        // 积分兑换代币函数（使用成功的claimToken）
+        async function claimTokenHandler() {
+            console.log('=== 开始积分兑换代币 ===');
+            
+            // 检查钱包连接状态
+            if (!window.walletManager || !window.walletManager.isConnected) {
+                alert('请先连接钱包！');
+                return;
+            }
+            
+            // 正确提取钱包地址
+            let walletAddress = '';
+            const walletObj = window.walletManager.currentWallet;
+            
+            if (walletObj && typeof walletObj === 'object') {
+                walletAddress = walletObj.address || 
+                               walletObj.publicKey || 
+                               walletObj.toString() || 
+                               (walletObj.toBase58 && walletObj.toBase58()) ||
+                               '';
+            } else {
+                walletAddress = String(walletObj || '');
+            }
+            
+            walletAddress = String(walletAddress).trim();
+            console.log('提取到的钱包地址:', walletAddress);
+            
+            if (!walletAddress || walletAddress === 'undefined' || walletAddress === 'null' || walletAddress === '[object Object]') {
+                alert('钱包地址提取失败，请重新连接钱包！');
+                return;
+            }
+            
+            // 获取按钮并显示加载状态
+            const claimTokenBtn = document.getElementById('claimTokenBtn');
+            const originalContent = claimTokenBtn.innerHTML;
+            claimTokenBtn.innerHTML = '<span class="text-white">⏳ 兑换中...</span>';
+            claimTokenBtn.disabled = true;
+            
+            try {
+                console.log('调用成功的claimToken函数...');
+                
+                // 使用和成功版本完全一样的调用方式
+                const claimToken = firebase.functions().httpsCallable("claimToken");
+                const result = await claimToken({ wallet: walletAddress });
+                
+                console.log('claimToken调用成功:', result);
+                
+                if (result.data.success) {
+                    alert(`🎉 积分兑换成功！\n交易哈希：${result.data.tx}\n\n您的代币已发送到钱包！`);
+                    
+                    // 更新积分显示
+                    updateScoreDisplay();
+                } else {
+                    alert('❌ 积分兑换失败: ' + (result.data.message || '未知错误'));
+                }
+                
+            } catch (error) {
+                console.error('积分兑换失败:', error);
+                
+                if (error.message && error.message.includes('没有可兑换的积分')) {
+                    alert('❌ 没有可兑换的积分，请先领取游戏奖励！');
+                } else if (error.message && error.message.includes('发币失败')) {
+                    alert('❌ 代币发送失败，请稍后重试');
+                } else {
+                    alert('❌ 积分兑换失败: ' + (error.message || '未知错误'));
+                }
+            } finally {
+                // 恢复按钮状态
+                claimTokenBtn.innerHTML = originalContent;
+                claimTokenBtn.disabled = false;
+            }
+        }
+        
+        // 更新积分显示
+        async function updateScoreDisplay() {
+            if (!window.walletManager || !window.walletManager.isConnected) return;
+            
+            try {
+                const walletAddress = window.walletManager.currentWallet?.address || 
+                                    window.walletManager.currentWallet?.publicKey || 
+                                    String(window.walletManager.currentWallet || '');
+                
+                if (!walletAddress || walletAddress === 'undefined') return;
+                
+                const userRef = firebase.database().ref(`users/${walletAddress}`);
+                const userSnap = await userRef.once('value');
+                const userData = userSnap.val() || {};
+                const currentScore = parseInt(userData.score || 0);
+                
+                // 更新显示
+                const currentScoreElement = document.getElementById('currentScore');
+                const exchangeableTokensElement = document.getElementById('exchangeableTokens');
+                
+                if (currentScoreElement) currentScoreElement.textContent = currentScore;
+                if (exchangeableTokensElement) exchangeableTokensElement.textContent = currentScore;
+                
+                // 更新兑换按钮状态
+                const claimTokenBtn = document.getElementById('claimTokenBtn');
+                if (claimTokenBtn) {
+                    claimTokenBtn.disabled = currentScore <= 0;
+                }
+                
+            } catch (error) {
+                console.error('更新积分显示失败:', error);
+            }
+        }
+        
         // 监听奖励页面按钮事件
         document.addEventListener('DOMContentLoaded', function() {
             // 领取奖励按钮点击事件
@@ -2845,6 +2752,9 @@ functions类型: ${typeof functions}
             
             // 最后倒计时奖励按钮
             document.getElementById('claimLastSuccessBtn').addEventListener('click', claimLastSuccessReward);
+            
+            // 积分兑换代币按钮
+            document.getElementById('claimTokenBtn').addEventListener('click', claimTokenHandler);
             
             // 验证地址按钮
             document.getElementById('verifyAddressBtn').addEventListener('click', function() {
@@ -2858,6 +2768,9 @@ functions类型: ${typeof functions}
                     resultDiv.innerHTML = `<span class="text-red-400">${result.message}</span>`;
                 }
             });
+            
+            // 页面加载时更新积分显示
+            setTimeout(updateScoreDisplay, 1000);
         });
     </script>
 </body>
