@@ -2274,7 +2274,7 @@
                     
                     // 测试一个简单的函数调用
                     try {
-                        const testFunction = functions.httpsCallable('getRoundDetails');
+                        const testFunction = firebase.functions().httpsCallable('getRoundDetails');
                         const testResult = await testFunction({
                             roundId: 'test',
                             rewardType: 'top20'
@@ -2518,60 +2518,18 @@ functions类型: ${typeof functions}
 
 即将调用Firebase Function...`);
                 
-                console.log('=== 强制调试信息 ===');
-                console.log('testParams:', testParams);
-                console.log('functions对象:', functions);
+                console.log('=== 使用成功版本的调用模式 ===');
+                console.log('requestData:', requestData);
                 
-                const claimGameReward = functions.httpsCallable('claimGameReward');
-                console.log('claimGameReward创建成功:', !!claimGameReward);
+                // 使用和成功版本完全一样的调用方式
+                const claimGameReward = firebase.functions().httpsCallable('claimGameReward');
+                console.log('Firebase Function创建成功');
                 
-                // 尝试多种调用方式
-                alert('正在调用Firebase Function...');
+                alert('使用firebase.functions()调用...');
                 
-                console.log('=== 尝试多种参数格式 ===');
-                
-                // 方式1: 直接传递对象
-                console.log('方式1: 直接传递', testParams);
-                
-                // 方式2: 包装在data中
-                const dataWrapped = { data: testParams };
-                console.log('方式2: data包装', dataWrapped);
-                
-                // 方式3: 解构传递
-                const destructured = { ...testParams };
-                console.log('方式3: 解构传递', destructured);
-                
-                // 方式4: 字符串参数确保
-                const stringified = {
-                    wallet: String(testParams.wallet),
-                    rewardType: String(testParams.rewardType),
-                    roundId: String(testParams.roundId)
-                };
-                console.log('方式4: 字符串化', stringified);
-                
-                try {
-                    // 首先尝试原始方式
-                    console.log('尝试原始调用...');
-                    const result = await claimGameReward(testParams);
-                    alert('原始调用成功！查看控制台结果');
-                    console.log('原始调用结果:', result);
-                } catch (error1) {
-                    console.error('原始调用失败:', error1);
-                    alert(`原始调用失败: ${error1.message}`);
-                    
-                    try {
-                        // 尝试字符串化参数
-                        console.log('尝试字符串化参数调用...');
-                        const result2 = await claimGameReward(stringified);
-                        alert('字符串化调用成功！查看控制台结果');
-                        console.log('字符串化调用结果:', result2);
-                    } catch (error2) {
-                        console.error('字符串化调用也失败:', error2);
-                        alert(`字符串化调用也失败: ${error2.message}`);
-                        throw error2; // 继续原有错误处理
-                    }
-                }
-                console.log('Firebase Function调用结果:', result);
+                // 使用和成功版本完全一样的简洁调用
+                const result = await claimGameReward(requestData);
+                console.log('Firebase Function调用成功:', result);
                 
                 // Callable Function直接返回结果，不需要检查response.ok
                 console.log('Callable Function返回结果:', result);
@@ -2713,8 +2671,8 @@ functions类型: ${typeof functions}
                 console.log('使用Firebase SDK调用Callable Function，参数:', requestData);
                 console.log('调用前最终检查 - requestData:', JSON.stringify(requestData, null, 2));
                 
-                // 使用Firebase Functions SDK调用Callable Function（使用指定region的实例）
-                const claimGameReward = functions.httpsCallable('claimGameReward');
+                // 使用和成功版本完全一样的调用方式
+                const claimGameReward = firebase.functions().httpsCallable('claimGameReward');
                 console.log('开始调用Firebase Function...');
                 const result = await claimGameReward(requestData);
                 console.log('Firebase Function调用结果:', result);
