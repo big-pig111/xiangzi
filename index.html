@@ -2514,7 +2514,7 @@
                 console.log('functions对象:', functions);
                 console.log('functions类型:', typeof functions);
                 console.log('functions构造函数:', functions.constructor.name);
-                console.log('functions.app():', functions.app());
+                console.log('functions._delegate:', functions._delegate);
                 console.log('functions.region:', functions._delegate?._region || 'unknown');
                 
                 const claimGameReward = functions.httpsCallable('claimGameReward');
