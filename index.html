@@ -627,32 +627,61 @@
             init() {
                 // 从Firebase加载倒计时状态
                 this.loadCountdownFromFirebase().then(() => {
-                    // 初始更新倒计时
-                    this.updateCountdown();
-                    this.updateHolderRewardCountdown();
-                    
-                    // 如果倒计时已经结束，显示LAUNCHED界面
-                    if (gameData.countdownEnded) {
+                    // 只有当倒计时成功加载后才启动更新
+                    if (this.countdownDate && this.holderRewardDate) {
+                        // 初始更新倒计时
+                        this.updateCountdown();
+                        this.updateHolderRewardCountdown();
+                        
+                        // 如果倒计时已经结束，显示LAUNCHED界面
+                        if (gameData.countdownEnded) {
+                            const countdownElement = document.getElementById("countdown");
+                            if (countdownElement && !countdownElement.innerHTML.includes("LAUNCHED")) {
+                                countdownElement.innerHTML = `
+                                    <div class="col-span-2 text-center">
+                                    <div class="text-[clamp(2rem,8vw,5rem)] font-bold text-memePink">LAUNCHED!</div>
+                                    <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
+                                </div>
+                                `;
+                            }
+                        }
+                        
+                        // 启动倒计时更新
+                        this.startCountdownUpdate();
+                        this.startHolderRewardCountdownUpdate();
+                        
+                        console.log('倒计时系统已启动');
+                    } else {
+                        console.log('倒计时未正确加载，等待Firebase连接...');
+                        // 显示等待状态
                         const countdownElement = document.getElementById("countdown");
-                        if (countdownElement && !countdownElement.innerHTML.includes("LAUNCHED")) {
+                        if (countdownElement) {
                             countdownElement.innerHTML = `
                                 <div class="col-span-2 text-center">
-                                <div class="text-[clamp(2rem,8vw,5rem)] font-bold text-memePink">LAUNCHED!</div>
-                                <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
-                            </div>
+                                <div class="text-[clamp(1.5rem,4vw,2rem)] font-bold text-memeYellow">等待连接...</div>
+                                <div class="text-lg text-white mt-2">正在连接服务器</div>
+                                </div>
                             `;
                         }
                     }
-                    
-                    // 启动倒计时更新
-                    this.startCountdownUpdate();
-                    this.startHolderRewardCountdownUpdate();
                     
                     // 绑定事件
                     this.bindEvents();
                     
                     // 从Firebase加载游戏数据
                     this.loadGameDataFromFirebase();
+                }).catch((error) => {
+                    console.error('初始化失败:', error);
+                    // 显示错误状态
+                    const countdownElement = document.getElementById("countdown");
+                    if (countdownElement) {
+                        countdownElement.innerHTML = `
+                            <div class="col-span-2 text-center">
+                            <div class="text-[clamp(1.5rem,4vw,2rem)] font-bold text-red-400">连接失败</div>
+                            <div class="text-lg text-white mt-2">请刷新页面重试</div>
+                            </div>
+                        `;
+                    }
                 });
             }
             
@@ -722,13 +751,15 @@
                     } else {
                         // 如果没有现有状态，检查是否是第一个用户
                         // 使用事务来确保只有一个用户创建倒计时
+                        console.log('没有现有倒计时状态，尝试创建新的倒计时...');
                         const result = await database.ref('countdownState').transaction((currentData) => {
+                            console.log('事务检查，当前数据:', currentData);
                             if (currentData === null) {
                                 // 这是第一个用户，创建新的倒计时
                                 const newCountdownDate = new Date();
                                 newCountdownDate.setMinutes(newCountdownDate.getMinutes() + 5);
                                 
-                                return {
+                                const newData = {
                                     countdownDate: newCountdownDate.getTime(),
                                     originalCountdownDate: newCountdownDate.getTime(),
                                     totalTimeAdjustment: 0,
@@ -736,9 +767,15 @@
                                     lastUpdated: Date.now(),
                                     createdBy: Date.now() // 添加创建时间戳
                                 };
+                                
+                                console.log('创建新的倒计时数据:', newData);
+                                return newData;
                             }
+                            console.log('已有倒计时数据，保持现有数据');
                             return currentData; // 其他用户保持现有数据
                         });
+                        
+                        console.log('事务结果:', result);
                         
                         if (result.committed) {
                             // 重新加载数据
@@ -751,8 +788,14 @@
                                 this.transactionCount = data.transactionCount || 0;
                                 gameData.countdownEnded = false;
                                 
-                                console.log('成功创建或加载倒计时状态');
+                                console.log('成功创建或加载倒计时状态:', {
+                                    countdownDate: this.countdownDate,
+                                    totalTimeAdjustment: this.totalTimeAdjustment,
+                                    transactionCount: this.transactionCount
+                                });
                             }
+                        } else {
+                            console.log('事务未提交，可能是并发冲突');
                         }
                     }
                     
@@ -761,11 +804,9 @@
                     
                 } catch (error) {
                     console.error('加载倒计时状态失败:', error);
-                    // 如果加载失败，使用默认值
-                    this.countdownDate = new Date();
-                    this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
-                    this.originalCountdownDate = new Date(this.countdownDate);
-                    gameData.countdownEnded = false;
+                    // 如果加载失败，不创建新的倒计时，等待Firebase恢复
+                    console.log('Firebase连接失败，等待重连...');
+                    // 不设置任何倒计时，让用户等待
                 }
             }
             
@@ -816,10 +857,9 @@
                     }
                 } catch (error) {
                     console.error('加载持仓奖励倒计时状态失败:', error);
-                    // 如果加载失败，使用默认值
-                    this.holderRewardDate = new Date();
-                    this.holderRewardDate.setMinutes(this.holderRewardDate.getMinutes() + 3);
-                    gameData.holderRewardEnded = false;
+                    // 如果加载失败，不创建新的倒计时，等待Firebase恢复
+                    console.log('Firebase连接失败，等待重连...');
+                    // 不设置任何倒计时，让用户等待
                 }
             }
             
