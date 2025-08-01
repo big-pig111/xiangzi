@@ -591,10 +591,9 @@
         // Solana实时交易检测器类
         class SolanaTransactionTracker {
             constructor() {
-                // 倒计时相关变量
-                this.countdownDate = new Date();
-                this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
-                this.originalCountdownDate = new Date(this.countdownDate);
+                // 倒计时相关变量 - 初始化为空，等待从Firebase加载
+                this.countdownDate = null;
+                this.originalCountdownDate = null;
                 this.totalTimeAdjustment = 0;
                 this.transactionCount = 0;
                 this.countdownInterval = null;
@@ -627,19 +626,22 @@
             }
             
             init() {
-                // 初始更新倒计时
-                this.updateCountdown();
-                this.updateHolderRewardCountdown();
-                
-                // 启动倒计时更新
-                this.startCountdownUpdate();
-                this.startHolderRewardCountdownUpdate();
-                
-                // 绑定事件
-                this.bindEvents();
-                
-                // 从Firebase加载游戏数据
-                this.loadGameDataFromFirebase();
+                // 从Firebase加载倒计时状态
+                this.loadCountdownFromFirebase().then(() => {
+                    // 初始更新倒计时
+                    this.updateCountdown();
+                    this.updateHolderRewardCountdown();
+                    
+                    // 启动倒计时更新
+                    this.startCountdownUpdate();
+                    this.startHolderRewardCountdownUpdate();
+                    
+                    // 绑定事件
+                    this.bindEvents();
+                    
+                    // 从Firebase加载游戏数据
+                    this.loadGameDataFromFirebase();
+                });
             }
             
             // 启动倒计时更新
@@ -672,9 +674,100 @@
                 // 监控功能已移至管理面板
             }
             
+            // 从Firebase加载倒计时状态
+            async loadCountdownFromFirebase() {
+                try {
+                    const countdownRef = database.ref('countdownState');
+                    const snapshot = await countdownRef.once('value');
+                    
+                    if (snapshot.exists()) {
+                        const data = snapshot.val();
+                        this.countdownDate = new Date(data.countdownDate);
+                        this.originalCountdownDate = new Date(data.originalCountdownDate);
+                        this.totalTimeAdjustment = data.totalTimeAdjustment || 0;
+                        this.transactionCount = data.transactionCount || 0;
+                        
+                        console.log('从Firebase加载倒计时状态:', {
+                            countdownDate: this.countdownDate,
+                            totalTimeAdjustment: this.totalTimeAdjustment,
+                            transactionCount: this.transactionCount
+                        });
+                    } else {
+                        // 如果没有现有状态，创建新的倒计时
+                        this.countdownDate = new Date();
+                        this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
+                        this.originalCountdownDate = new Date(this.countdownDate);
+                        
+                        // 保存到Firebase
+                        await this.saveCountdownToFirebase();
+                        
+                        console.log('创建新的倒计时状态');
+                    }
+                } catch (error) {
+                    console.error('加载倒计时状态失败:', error);
+                    // 如果加载失败，使用默认值
+                    this.countdownDate = new Date();
+                    this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
+                    this.originalCountdownDate = new Date(this.countdownDate);
+                }
+            }
+            
+            // 保存倒计时状态到Firebase
+            async saveCountdownToFirebase() {
+                // 防抖机制，避免频繁保存
+                if (this.saveTimeout) {
+                    clearTimeout(this.saveTimeout);
+                }
+                
+                this.saveTimeout = setTimeout(async () => {
+                    try {
+                        const countdownData = {
+                            countdownDate: this.countdownDate.getTime(),
+                            originalCountdownDate: this.originalCountdownDate.getTime(),
+                            totalTimeAdjustment: this.totalTimeAdjustment,
+                            transactionCount: this.transactionCount,
+                            lastUpdated: Date.now()
+                        };
+                        
+                        await database.ref('countdownState').set(countdownData);
+                        console.log('倒计时状态已保存到Firebase');
+                    } catch (error) {
+                        console.error('保存倒计时状态失败:', error);
+                    }
+                }, 1000); // 1秒防抖
+            }
+            
+            // 立即保存倒计时状态（用于重要操作）
+            async saveCountdownToFirebaseImmediate() {
+                // 清除防抖定时器
+                if (this.saveTimeout) {
+                    clearTimeout(this.saveTimeout);
+                }
+                
+                try {
+                    const countdownData = {
+                        countdownDate: this.countdownDate.getTime(),
+                        originalCountdownDate: this.originalCountdownDate.getTime(),
+                        totalTimeAdjustment: this.totalTimeAdjustment,
+                        transactionCount: this.transactionCount,
+                        lastUpdated: Date.now()
+                    };
+                    
+                    await database.ref('countdownState').set(countdownData);
+                    console.log('倒计时状态已立即保存到Firebase');
+                } catch (error) {
+                    console.error('立即保存倒计时状态失败:', error);
+                }
+            }
+            
             // 更新倒计时
             updateCountdown() {
-            const now = new Date();
+                if (!this.countdownDate) {
+                    console.log('倒计时日期未初始化，跳过更新');
+                    return;
+                }
+                
+                const now = new Date();
                 const timeLeft = this.countdownDate - now;
                 
                 // 调试信息
@@ -690,55 +783,63 @@
                 const minutes = Math.max(0, Math.floor(timeLeft / (1000 * 60)));
                 const seconds = Math.max(0, Math.floor((timeLeft % (1000 * 60)) / 1000));
             
-            // 显示倒计时，确保两位数格式
-            document.getElementById("minutes").innerText = minutes.toString().padStart(2, '0');
-            document.getElementById("seconds").innerText = seconds.toString().padStart(2, '0');
-            
-            // 倒计时结束时的处理
-            if (timeLeft < 0) {
-                console.log('倒计时结束检测：timeLeft =', timeLeft, 'countdownEnded =', gameData.countdownEnded);
+                // 显示倒计时，确保两位数格式
+                const minutesElement = document.getElementById("minutes");
+                const secondsElement = document.getElementById("seconds");
                 
-                // 只在第一次倒计时结束时显示LAUNCHED
-                if (!gameData.countdownEnded) {
-                    console.log('显示LAUNCHED界面，调用onCountdownEnded和pauseGame');
+                if (minutesElement) minutesElement.innerText = minutes.toString().padStart(2, '0');
+                if (secondsElement) secondsElement.innerText = seconds.toString().padStart(2, '0');
+            
+                // 倒计时结束时的处理
+                if (timeLeft < 0) {
+                    console.log('倒计时结束检测：timeLeft =', timeLeft, 'countdownEnded =', gameData.countdownEnded);
                     
-                document.getElementById("countdown").innerHTML = `
-                        <div class="col-span-2 text-center">
-                        <div class="text-[clamp(2rem,8vw,5rem)] font-bold text-memePink">LAUNCHED!</div>
-                        <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
-                    </div>
-                `;
+                    // 检查是否已经显示过LAUNCHED界面
+                    const countdownElement = document.getElementById("countdown");
+                    const hasLaunchedDisplay = countdownElement && countdownElement.innerHTML.includes("LAUNCHED");
                     
-                    // 倒计时结束时自动捕捉数据
-                    gameData.countdownEnded = true;
-                    this.onCountdownEnded();
-                    
-                    // 游戏暂停逻辑
-                    this.pauseGame();
-                } else {
-                    console.log('倒计时已结束，但countdownEnded为true，跳过处理');
-                }
-            } else {
-                // 倒计时未结束时，确保显示正常的倒计时结构
-                const countdownElement = document.getElementById("countdown");
-                if (countdownElement.innerHTML.includes("LAUNCHED")) {
-                    // 如果当前显示的是LAUNCHED，恢复倒计时显示结构
-                    countdownElement.innerHTML = `
-                        <!-- 分 -->
-                        <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                            <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">00</div>
-                            <div class="text-white font-bold">MINUTES</div>
-                        </div>
+                    if (!hasLaunchedDisplay) {
+                        console.log('显示LAUNCHED界面，调用onCountdownEnded和pauseGame');
                         
-                        <!-- 秒 -->
-                        <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                            <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
-                            <div class="text-black font-bold">SECONDS</div>
-                        </div>
-                    `;
+                        if (countdownElement) {
+                            countdownElement.innerHTML = `
+                                <div class="col-span-2 text-center">
+                                <div class="text-[clamp(2rem,8vw,5rem)] font-bold text-memePink">LAUNCHED!</div>
+                                <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
+                            </div>
+                            `;
+                        }
+                        
+                        // 倒计时结束时自动捕捉数据
+                        gameData.countdownEnded = true;
+                        this.onCountdownEnded();
+                        
+                        // 游戏暂停逻辑
+                        this.pauseGame();
+                    } else {
+                        console.log('LAUNCHED界面已显示，跳过重复处理');
+                    }
+                } else {
+                    // 倒计时未结束时，确保显示正常的倒计时结构
+                    const countdownElement = document.getElementById("countdown");
+                    if (countdownElement && countdownElement.innerHTML.includes("LAUNCHED")) {
+                        // 如果当前显示的是LAUNCHED，恢复倒计时显示结构
+                        countdownElement.innerHTML = `
+                            <!-- 分 -->
+                            <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
+                                <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">00</div>
+                                <div class="text-white font-bold">MINUTES</div>
+                            </div>
+                            
+                            <!-- 秒 -->
+                            <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
+                                <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
+                                <div class="text-black font-bold">SECONDS</div>
+                            </div>
+                        `;
+                    }
                 }
             }
-        }
         
         // 更新持仓奖励倒计时
         updateHolderRewardCountdown() {
@@ -1018,9 +1119,14 @@
                     this.totalTimeAdjustment = currentAdjustment;
                     this.countdownDate.setTime(this.countdownDate.getTime() + (gameData.countdownIncrement * 1000));
                     
+                    // 保存倒计时状态到Firebase
+                    this.saveCountdownToFirebaseImmediate();
+                    
                     // 更新显示
-                    document.getElementById('transactionCount').innerText = this.transactionCount;
-                    document.getElementById('timeAdjustment').innerText = `+${this.totalTimeAdjustment} 秒`;
+                    const transactionCountElement = document.getElementById('transactionCount');
+                    const timeAdjustmentElement = document.getElementById('timeAdjustment');
+                    if (transactionCountElement) transactionCountElement.innerText = this.transactionCount;
+                    if (timeAdjustmentElement) timeAdjustmentElement.innerText = `+${this.totalTimeAdjustment} 秒`;
                     this.addLogEntry(`💰 检测到大额买入交易 #${this.transactionCount}！数量: ${amount}，倒计时 +${gameData.countdownIncrement}秒`, 'success');
                     
                     // 记录成功增加倒计时的地址
@@ -1034,10 +1140,12 @@
                     this.saveTransactionToFirebase(tx);
                     
                     // 添加视觉反馈
-                    document.getElementById('timeAdjustment').classList.add('animate-pulse');
-                    setTimeout(() => {
-                        document.getElementById('timeAdjustment').classList.remove('animate-pulse');
-                    }, 1000);
+                    if (timeAdjustmentElement) {
+                        timeAdjustmentElement.classList.add('animate-pulse');
+                        setTimeout(() => {
+                            timeAdjustmentElement.classList.remove('animate-pulse');
+                        }, 1000);
+                    }
                 } else {
                     this.addLogEntry(`⚠️ 大额买入交易 #${this.transactionCount} 检测到，但已达到10分钟上限！`, 'warning');
                 }
@@ -1847,25 +1955,35 @@
                 this.totalTimeAdjustment = 0;
                 this.transactionCount = 0;
                 
+                // 保存新的倒计时状态到Firebase
+                this.saveCountdownToFirebaseImmediate();
+                
+                // 重置游戏状态（保留数据）
+                this.resetGameState();
+                
                 // 恢复倒计时显示结构
                 const countdownElement = document.getElementById("countdown");
-                countdownElement.innerHTML = `
-                    <!-- 分 -->
-                    <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                        <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">05</div>
-                        <div class="text-white font-bold">MINUTES</div>
-                    </div>
-                    
-                    <!-- 秒 -->
-                    <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
-                        <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
-                        <div class="text-black font-bold">SECONDS</div>
-                    </div>
-                `;
+                if (countdownElement) {
+                    countdownElement.innerHTML = `
+                        <!-- 分 -->
+                        <div class="bg-memePurple border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
+                            <div id="minutes" class="text-[clamp(2rem,6vw,4rem)] font-bold text-white">05</div>
+                            <div class="text-white font-bold">MINUTES</div>
+                        </div>
+                        
+                        <!-- 秒 -->
+                        <div class="bg-memeGreen border-meme p-4 text-center transform hover:scale-105 transition-all duration-300 glow">
+                            <div id="seconds" class="text-[clamp(2rem,6vw,4rem)] font-bold text-black">00</div>
+                            <div class="text-black font-bold">SECONDS</div>
+                        </div>
+                    `;
+                }
                 
                 // 更新显示
-                document.getElementById('transactionCount').innerText = '0';
-                document.getElementById('timeAdjustment').innerText = '+0 秒';
+                const transactionCountElement = document.getElementById('transactionCount');
+                const timeAdjustmentElement = document.getElementById('timeAdjustment');
+                if (transactionCountElement) transactionCountElement.innerText = '0';
+                if (timeAdjustmentElement) timeAdjustmentElement.innerText = '+0 秒';
                 
                 // 清空详细交易表格
                 this.updateTransactionsDisplay();
@@ -1875,9 +1993,6 @@
                 if (detailedCount) {
                     detailedCount.textContent = '0 条记录';
                 }
-                
-                // 重置游戏状态（保留数据）
-                this.resetGameState();
                 
                 // 重新启动倒计时更新
                 this.startCountdownUpdate();
@@ -1892,9 +2007,10 @@
             
             // 重置游戏状态（保留数据）
             resetGameState() {
-                // 只重置游戏状态，保留数据
+                // 重置游戏状态，保留数据
                 gameData.countdownEnded = false;
                 gameData.lastRewardTime = 0;
+                gameData.holderRewardEnded = false; // 重置持仓奖励结束状态
                 
                 rewardData.countdownEnded = false;
                 
@@ -1920,23 +2036,29 @@
         
         // 初始化应用
         document.addEventListener('DOMContentLoaded', async () => {
-            // 从Firebase加载代币地址
-            await loadTokenAddressFromFirebase();
-            
-            // 启动监听器监听地址变化
-            listenToTokenAddressChanges();
-            
-            // 启动监听器监听管理面板控制指令
-            listenToAdminControl();
-            
-            // 初始化Solana交易追踪器
-            window.solanaTracker = new SolanaTransactionTracker();
-            
-            // 初始化钱包管理器
-            window.walletManager = new WalletManager();
-            window.walletManager.init();
-            
-            // 不自动启动持仓者刷新，等待管理面板指令
+            try {
+                // 从Firebase加载代币地址
+                await loadTokenAddressFromFirebase();
+                
+                // 启动监听器监听地址变化
+                listenToTokenAddressChanges();
+                
+                // 启动监听器监听管理面板控制指令
+                listenToAdminControl();
+                
+                // 初始化Solana交易追踪器
+                window.solanaTracker = new SolanaTransactionTracker();
+                
+                // 初始化钱包管理器
+                window.walletManager = new WalletManager();
+                window.walletManager.init();
+                
+                console.log('应用初始化完成');
+                
+                // 不自动启动持仓者刷新，等待管理面板指令
+            } catch (error) {
+                console.error('应用初始化失败:', error);
+            }
         });
         
         // 添加一些互动效果
@@ -2186,8 +2308,38 @@
             });
         }
         
-        // 监听管理面板的控制指令
-        function listenToAdminControl() {
+                    // 监听管理面板的控制指令
+            function listenToAdminControl() {
+                // 监听倒计时状态变化
+                database.ref('countdownState').on('value', (snapshot) => {
+                    if (snapshot.exists() && window.solanaTracker) {
+                        const data = snapshot.val();
+                        const newCountdownDate = new Date(data.countdownDate);
+                        const newOriginalCountdownDate = new Date(data.originalCountdownDate);
+                        
+                        // 只有当时间不同时才更新，避免循环更新
+                        if (window.solanaTracker.countdownDate && 
+                            window.solanaTracker.countdownDate.getTime() !== newCountdownDate.getTime()) {
+                            
+                            window.solanaTracker.countdownDate = newCountdownDate;
+                            window.solanaTracker.originalCountdownDate = newOriginalCountdownDate;
+                            window.solanaTracker.totalTimeAdjustment = data.totalTimeAdjustment || 0;
+                            window.solanaTracker.transactionCount = data.transactionCount || 0;
+                            
+                            // 更新显示
+                            const transactionCountElement = document.getElementById('transactionCount');
+                            const timeAdjustmentElement = document.getElementById('timeAdjustment');
+                            if (transactionCountElement) transactionCountElement.innerText = window.solanaTracker.transactionCount;
+                            if (timeAdjustmentElement) timeAdjustmentElement.innerText = `+${window.solanaTracker.totalTimeAdjustment} 秒`;
+                            
+                            console.log('从Firebase同步倒计时状态:', {
+                                countdownDate: window.solanaTracker.countdownDate,
+                                totalTimeAdjustment: window.solanaTracker.totalTimeAdjustment,
+                                transactionCount: window.solanaTracker.transactionCount
+                            });
+                        }
+                    }
+                });
             // 监听监控控制
             database.ref('gameControl/monitoring').on('value', (snapshot) => {
                 if (snapshot.exists()) {
@@ -2238,6 +2390,10 @@
                         window.solanaTracker.originalCountdownDate = new Date(window.solanaTracker.countdownDate);
                         window.solanaTracker.totalTimeAdjustment = 0;
                         window.solanaTracker.transactionCount = 0;
+                        
+                        // 保存到Firebase
+                        window.solanaTracker.saveCountdownToFirebaseImmediate();
+                        
                         window.solanaTracker.updateCountdown();
                         console.log('管理面板指令：重置倒计时');
                     }
@@ -2276,6 +2432,11 @@
                         // 立即将倒计时设置为0（用于测试）
                         window.solanaTracker.countdownDate = new Date();
                         gameData.countdownEnded = false;
+                        gameData.holderRewardEnded = false; // 重置持仓奖励状态
+                        
+                        // 保存到Firebase
+                        window.solanaTracker.saveCountdownToFirebaseImmediate();
+                        
                         window.solanaTracker.updateCountdown();
                         console.log('管理面板指令：倒计时归零');
                     }
