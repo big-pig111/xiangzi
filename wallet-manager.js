@@ -24,17 +24,17 @@ class WalletManager {
                 }
             }
         } catch (error) {
-            console.log('钱包连接检查失败:', error);
+            console.log('Wallet connection check failed:', error);
         }
     }
     
     // 显示钱包选择模态框
     showWalletModal() {
-        console.log('显示钱包弹窗');
+        console.log('Show wallet modal');
         
         // 防止重复创建模态框
         if (document.getElementById('walletModal')) {
-            console.log('弹窗已存在，直接返回');
+            console.log('Modal already exists, returning directly');
             return;
         }
         
@@ -71,7 +71,7 @@ class WalletManager {
                 z-index: 10000 !important;
             ">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h3 style="color: #FFDD00; font-weight: bold; font-size: 20px;">选择钱包</h3>
+                    <h3 style="color: #FFDD00; font-weight: bold; font-size: 20px;">Select Wallet</h3>
                     <button id="closeWalletModal" style="color: #9CA3AF; font-size: 24px; background: none; border: none; cursor: pointer;">&times;</button>
                 </div>
                 
@@ -81,7 +81,7 @@ class WalletManager {
                             <span style="font-size: 24px; margin-right: 12px;">🔵</span>
                             <div style="text-align: left;">
                                 <div style="font-weight: bold;">OKX Wallet</div>
-                                <div style="font-size: 14px; opacity: 0.75;">OKX交易所钱包</div>
+                                <div style="font-size: 14px; opacity: 0.75;">OKX Exchange Wallet</div>
                             </div>
                         </div>
                         <span style="font-size: 18px;">→</span>
@@ -92,7 +92,7 @@ class WalletManager {
                             <span style="font-size: 24px; margin-right: 12px;">👻</span>
                             <div style="text-align: left;">
                                 <div style="font-weight: bold;">Phantom Wallet</div>
-                                <div style="font-size: 14px; opacity: 0.75;">幽灵钱包</div>
+                                <div style="font-size: 14px; opacity: 0.75;">Ghost Wallet</div>
                             </div>
                         </div>
                         <span style="font-size: 18px;">→</span>
@@ -103,7 +103,7 @@ class WalletManager {
                             <span style="font-size: 24px; margin-right: 12px;">🟡</span>
                             <div style="text-align: left;">
                                 <div style="font-weight: bold;">Coinbase Wallet</div>
-                                <div style="font-size: 14px; opacity: 0.75;">Coinbase钱包</div>
+                                <div style="font-size: 14px; opacity: 0.75;">Coinbase Wallet</div>
                             </div>
                         </div>
                         <span style="font-size: 18px;">→</span>
@@ -112,7 +112,7 @@ class WalletManager {
                 
                 <div style="margin-top: 16px; text-align: center;">
                     <p style="color: #9CA3AF; font-size: 14px;">
-                        请确保已安装相应的钱包扩展
+                        Please ensure you have installed the corresponding wallet extension
                     </p>
                 </div>
             </div>
@@ -193,7 +193,7 @@ class WalletManager {
                     wallet = await this.connectCoinbaseWallet();
                     break;
                 default:
-                    throw new Error('不支持的钱包类型');
+                    throw new Error('Unsupported wallet type');
             }
             
             if (wallet) {
@@ -209,13 +209,13 @@ class WalletManager {
                 // 隐藏模态框
                 this.hideWalletModal();
                 
-                console.log('钱包连接成功:', this.walletAddress);
+                console.log('Wallet connected successfully:', this.walletAddress);
                 return true;
             }
             
         } catch (error) {
-            console.error('钱包连接失败:', error);
-            alert(`钱包连接失败: ${error.message}`);
+            console.error('Wallet connection failed:', error);
+            alert(`Wallet connection failed: ${error.message}`);
             return false;
         }
     }
@@ -223,7 +223,7 @@ class WalletManager {
     // 连接Phantom钱包
     async connectPhantomWallet() {
         if (!window.solana || !window.solana.isPhantom) {
-            throw new Error('请先安装Phantom钱包扩展');
+            throw new Error('Please install Phantom wallet extension first');
         }
         
         try {
@@ -234,32 +234,44 @@ class WalletManager {
                 publicKey: response.publicKey
             };
         } catch (error) {
-            throw new Error('Phantom钱包连接失败: ' + error.message);
+            throw new Error('Phantom wallet connection failed: ' + error.message);
         }
     }
     
     // 连接OKX钱包
     async connectOKXWallet() {
         if (!window.okxwallet) {
-            throw new Error('请先安装OKX钱包扩展');
+            throw new Error('Please install OKX wallet extension first');
         }
         
         try {
-            const response = await window.okxwallet.connect();
+            // OKX wallet might use different API methods
+            let response;
+            if (typeof window.okxwallet.connect === 'function') {
+                response = await window.okxwallet.connect();
+            } else if (typeof window.okxwallet.request === 'function') {
+                response = await window.okxwallet.request({ method: 'connect' });
+            } else if (window.okxwallet.accounts && window.okxwallet.accounts.length > 0) {
+                // If already connected, get the first account
+                response = { publicKey: window.okxwallet.accounts[0] };
+            } else {
+                throw new Error('OKX wallet connection method not found');
+            }
+            
             return {
                 type: 'okx',
                 address: response.publicKey.toString(),
                 publicKey: response.publicKey
             };
         } catch (error) {
-            throw new Error('OKX钱包连接失败: ' + error.message);
+            throw new Error('OKX wallet connection failed: ' + error.message);
         }
     }
     
     // 连接Coinbase钱包
     async connectCoinbaseWallet() {
         if (!window.coinbaseWalletSolana) {
-            throw new Error('请先安装Coinbase钱包扩展');
+            throw new Error('Please install Coinbase wallet extension first');
         }
         
         try {
@@ -270,7 +282,7 @@ class WalletManager {
                 publicKey: response.publicKey
             };
         } catch (error) {
-            throw new Error('Coinbase钱包连接失败: ' + error.message);
+            throw new Error('Coinbase wallet connection failed: ' + error.message);
         }
     }
     
@@ -306,10 +318,10 @@ class WalletManager {
                 window.uiManager.updateWalletStatus(false);
             }
             
-            console.log('钱包已断开连接');
+            console.log('Wallet disconnected');
             
         } catch (error) {
-            console.error('断开钱包连接失败:', error);
+            console.error('Failed to disconnect wallet:', error);
         }
     }
     
@@ -331,7 +343,7 @@ class WalletManager {
     // 签名消息
     async signMessage(message) {
         if (!this.isConnected || !this.currentWallet) {
-            throw new Error('钱包未连接');
+            throw new Error('Wallet not connected');
         }
         
         try {
@@ -348,20 +360,20 @@ class WalletManager {
                     signature = await window.coinbaseWalletSolana.signMessage(new TextEncoder().encode(message));
                     break;
                 default:
-                    throw new Error('不支持的钱包类型');
+                    throw new Error('Unsupported wallet type');
             }
             
             return signature;
             
         } catch (error) {
-            throw new Error('消息签名失败: ' + error.message);
+            throw new Error('Message signing failed: ' + error.message);
         }
     }
     
     // 发送交易
     async sendTransaction(transaction) {
         if (!this.isConnected || !this.currentWallet) {
-            throw new Error('钱包未连接');
+            throw new Error('Wallet not connected');
         }
         
         try {
@@ -378,13 +390,13 @@ class WalletManager {
                     signature = await window.coinbaseWalletSolana.sendTransaction(transaction);
                     break;
                 default:
-                    throw new Error('不支持的钱包类型');
+                    throw new Error('Unsupported wallet type');
             }
             
             return signature;
             
         } catch (error) {
-            throw new Error('交易发送失败: ' + error.message);
+            throw new Error('Transaction sending failed: ' + error.message);
         }
     }
     
@@ -393,16 +405,16 @@ class WalletManager {
         // Phantom钱包监听器
         if (window.solana) {
             window.solana.on('connect', () => {
-                console.log('Phantom钱包已连接');
+                console.log('Phantom wallet connected');
             });
             
             window.solana.on('disconnect', () => {
-                console.log('Phantom钱包已断开');
+                console.log('Phantom wallet disconnected');
                 this.disconnectWallet();
             });
             
             window.solana.on('accountChanged', (publicKey) => {
-                console.log('Phantom钱包账户已更改:', publicKey.toString());
+                console.log('Phantom wallet account changed:', publicKey.toString());
                 this.walletAddress = publicKey.toString();
                 if (window.uiManager) {
                     window.uiManager.updateWalletStatus(true, this.walletAddress);
@@ -413,11 +425,11 @@ class WalletManager {
         // OKX钱包监听器
         if (window.okxwallet) {
             window.okxwallet.on('connect', () => {
-                console.log('OKX钱包已连接');
+                console.log('OKX wallet connected');
             });
             
             window.okxwallet.on('disconnect', () => {
-                console.log('OKX钱包已断开');
+                console.log('OKX wallet disconnected');
                 this.disconnectWallet();
             });
         }
@@ -425,11 +437,11 @@ class WalletManager {
         // Coinbase钱包监听器
         if (window.coinbaseWalletSolana) {
             window.coinbaseWalletSolana.on('connect', () => {
-                console.log('Coinbase钱包已连接');
+                console.log('Coinbase wallet connected');
             });
             
             window.coinbaseWalletSolana.on('disconnect', () => {
-                console.log('Coinbase钱包已断开');
+                console.log('Coinbase wallet disconnected');
                 this.disconnectWallet();
             });
         }
