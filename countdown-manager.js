@@ -63,6 +63,13 @@ class CountdownManager {
                     this.gameData.countdownEnded = timeLeft < 0;
                 }
                 
+                // 确保倒计时结束状态正确设置
+                const now = new Date();
+                const timeLeft = this.countdownDate - now;
+                if (timeLeft < 0) {
+                    this.gameData.countdownEnded = true;
+                }
+                
                 console.log('从Firebase加载倒计时状态成功');
             } else {
                 // 创建新的倒计时
@@ -207,6 +214,20 @@ class CountdownManager {
         
         const now = new Date();
         const timeLeft = this.countdownDate - now;
+        
+        // 如果倒计时已经结束且状态已标记，直接显示结束状态
+        if (timeLeft < 0 && this.gameData.countdownEnded) {
+            const countdownElement = document.getElementById("countdown");
+            if (countdownElement) {
+                countdownElement.innerHTML = `
+                    <div class="col-span-2 text-center">
+                    <div class="text-responsive-large font-bold text-memePink">LAUNCHED!</div>
+                    <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
+                    </div>
+                `;
+            }
+            return;
+        }
         
         const minutes = Math.max(0, Math.floor(timeLeft / (1000 * 60)));
         const seconds = Math.max(0, Math.floor((timeLeft % (1000 * 60)) / 1000));
