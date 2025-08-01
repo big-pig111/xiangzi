@@ -256,7 +256,7 @@
                 <div class="text-center">
                     <div class="text-memeYellow font-bold text-sm mb-1">🏆 持仓奖励倒计时</div>
                     <div id="holderRewardCountdown" class="text-xl font-bold text-memePink">20:00</div>
-                    <div class="text-gray-300 text-xs">每3分钟快照一次（测试）</div>
+                    <div class="text-gray-300 text-xs">每3分钟快照一次</div>
                 </div>
             </div>
             
@@ -632,6 +632,19 @@
                     this.updateCountdown();
                     this.updateHolderRewardCountdown();
                     
+                    // 如果倒计时已经结束，显示LAUNCHED界面
+                    if (gameData.countdownEnded) {
+                        const countdownElement = document.getElementById("countdown");
+                        if (countdownElement && !countdownElement.innerHTML.includes("LAUNCHED")) {
+                            countdownElement.innerHTML = `
+                                <div class="col-span-2 text-center">
+                                <div class="text-[clamp(2rem,8vw,5rem)] font-bold text-memePink">LAUNCHED!</div>
+                                <div class="text-2xl text-white mt-4">TO THE MOON!!! 🚀</div>
+                            </div>
+                            `;
+                        }
+                    }
+                    
                     // 启动倒计时更新
                     this.startCountdownUpdate();
                     this.startHolderRewardCountdownUpdate();
@@ -687,28 +700,84 @@
                         this.totalTimeAdjustment = data.totalTimeAdjustment || 0;
                         this.transactionCount = data.transactionCount || 0;
                         
+                        // 检查倒计时是否已经结束
+                        const now = new Date();
+                        const timeLeft = this.countdownDate - now;
+                        
+                        if (timeLeft < 0) {
+                            // 倒计时已经结束，设置状态但不立即显示弹窗
+                            gameData.countdownEnded = true;
+                            console.log('从Firebase加载的倒计时已经结束，设置countdownEnded为true');
+                        } else {
+                            // 倒计时未结束，确保状态正确
+                            gameData.countdownEnded = false;
+                        }
+                        
                         console.log('从Firebase加载倒计时状态:', {
                             countdownDate: this.countdownDate,
                             totalTimeAdjustment: this.totalTimeAdjustment,
-                            transactionCount: this.transactionCount
+                            transactionCount: this.transactionCount,
+                            timeLeft: timeLeft,
+                            countdownEnded: gameData.countdownEnded
                         });
                     } else {
                         // 如果没有现有状态，创建新的倒计时
                         this.countdownDate = new Date();
                         this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
                         this.originalCountdownDate = new Date(this.countdownDate);
+                        gameData.countdownEnded = false;
                         
                         // 保存到Firebase
                         await this.saveCountdownToFirebase();
                         
                         console.log('创建新的倒计时状态');
                     }
+                    
+                    // 加载持仓奖励倒计时状态
+                    await this.loadHolderRewardCountdownFromFirebase();
+                    
                 } catch (error) {
                     console.error('加载倒计时状态失败:', error);
                     // 如果加载失败，使用默认值
                     this.countdownDate = new Date();
                     this.countdownDate.setMinutes(this.countdownDate.getMinutes() + 5);
                     this.originalCountdownDate = new Date(this.countdownDate);
+                    gameData.countdownEnded = false;
+                }
+            }
+            
+            // 从Firebase加载持仓奖励倒计时状态
+            async loadHolderRewardCountdownFromFirebase() {
+                try {
+                    const holderRewardRef = database.ref('holderRewardCountdownState');
+                    const snapshot = await holderRewardRef.once('value');
+                    
+                    if (snapshot.exists()) {
+                        const data = snapshot.val();
+                        this.holderRewardDate = new Date(data.holderRewardDate);
+                        gameData.holderRewardEnded = data.holderRewardEnded || false;
+                        
+                        console.log('从Firebase加载持仓奖励倒计时状态:', {
+                            holderRewardDate: this.holderRewardDate,
+                            holderRewardEnded: gameData.holderRewardEnded
+                        });
+                    } else {
+                        // 如果没有现有状态，创建新的持仓奖励倒计时
+                        this.holderRewardDate = new Date();
+                        this.holderRewardDate.setMinutes(this.holderRewardDate.getMinutes() + 3);
+                        gameData.holderRewardEnded = false;
+                        
+                        // 保存到Firebase
+                        await this.saveHolderRewardCountdownToFirebase();
+                        
+                        console.log('创建新的持仓奖励倒计时状态');
+                    }
+                } catch (error) {
+                    console.error('加载持仓奖励倒计时状态失败:', error);
+                    // 如果加载失败，使用默认值
+                    this.holderRewardDate = new Date();
+                    this.holderRewardDate.setMinutes(this.holderRewardDate.getMinutes() + 3);
+                    gameData.holderRewardEnded = false;
                 }
             }
             
@@ -760,6 +829,22 @@
                 }
             }
             
+            // 保存持仓奖励倒计时状态到Firebase
+            async saveHolderRewardCountdownToFirebase() {
+                try {
+                    const holderRewardData = {
+                        holderRewardDate: this.holderRewardDate.getTime(),
+                        holderRewardEnded: gameData.holderRewardEnded,
+                        lastUpdated: Date.now()
+                    };
+                    
+                    await database.ref('holderRewardCountdownState').set(holderRewardData);
+                    console.log('持仓奖励倒计时状态已保存到Firebase');
+                } catch (error) {
+                    console.error('保存持仓奖励倒计时状态失败:', error);
+                }
+            }
+            
             // 更新倒计时
             updateCountdown() {
                 if (!this.countdownDate) {
@@ -798,8 +883,9 @@
                     const countdownElement = document.getElementById("countdown");
                     const hasLaunchedDisplay = countdownElement && countdownElement.innerHTML.includes("LAUNCHED");
                     
-                    if (!hasLaunchedDisplay) {
-                        console.log('显示LAUNCHED界面，调用onCountdownEnded和pauseGame');
+                    // 检查是否已经处理过倒计时结束
+                    if (!hasLaunchedDisplay && !gameData.countdownEnded) {
+                        console.log('倒计时真正归零，显示LAUNCHED界面，调用onCountdownEnded和pauseGame');
                         
                         if (countdownElement) {
                             countdownElement.innerHTML = `
@@ -816,8 +902,12 @@
                         
                         // 游戏暂停逻辑
                         this.pauseGame();
+                    } else if (hasLaunchedDisplay && !gameData.countdownEnded) {
+                        // 如果显示了LAUNCHED但状态未设置，设置状态
+                        gameData.countdownEnded = true;
+                        console.log('检测到LAUNCHED界面但状态未设置，已设置countdownEnded为true');
                     } else {
-                        console.log('LAUNCHED界面已显示，跳过重复处理');
+                        console.log('LAUNCHED界面已显示或已处理过倒计时结束，跳过重复处理');
                     }
                 } else {
                     // 倒计时未结束时，确保显示正常的倒计时结构
@@ -863,9 +953,13 @@
                     gameData.holderRewardEnded = true;
                     this.onHolderRewardEnded();
                     
-                    // 重置持仓奖励倒计时为3分钟（测试用）
+                    // 重置持仓奖励倒计时为3分钟
                     this.holderRewardDate = new Date(Date.now() + 3 * 60 * 1000);
                     gameData.holderRewardEnded = false;
+                    
+                    // 保存持仓奖励倒计时状态到Firebase
+                    this.saveHolderRewardCountdownToFirebase();
+                    
                     console.log('持仓奖励倒计时已重置为3分钟');
                 }
             }
@@ -2326,6 +2420,19 @@
                             window.solanaTracker.totalTimeAdjustment = data.totalTimeAdjustment || 0;
                             window.solanaTracker.transactionCount = data.transactionCount || 0;
                             
+                            // 检查倒计时是否已经结束
+                            const now = new Date();
+                            const timeLeft = window.solanaTracker.countdownDate - now;
+                            
+                            if (timeLeft < 0) {
+                                // 倒计时已经结束，设置状态
+                                gameData.countdownEnded = true;
+                                console.log('从Firebase同步的倒计时已经结束，设置countdownEnded为true');
+                            } else {
+                                // 倒计时未结束，确保状态正确
+                                gameData.countdownEnded = false;
+                            }
+                            
                             // 更新显示
                             const transactionCountElement = document.getElementById('transactionCount');
                             const timeAdjustmentElement = document.getElementById('timeAdjustment');
@@ -2335,7 +2442,30 @@
                             console.log('从Firebase同步倒计时状态:', {
                                 countdownDate: window.solanaTracker.countdownDate,
                                 totalTimeAdjustment: window.solanaTracker.totalTimeAdjustment,
-                                transactionCount: window.solanaTracker.transactionCount
+                                transactionCount: window.solanaTracker.transactionCount,
+                                timeLeft: timeLeft,
+                                countdownEnded: gameData.countdownEnded
+                            });
+                        }
+                    }
+                });
+                
+                // 监听持仓奖励倒计时状态变化
+                database.ref('holderRewardCountdownState').on('value', (snapshot) => {
+                    if (snapshot.exists() && window.solanaTracker) {
+                        const data = snapshot.val();
+                        const newHolderRewardDate = new Date(data.holderRewardDate);
+                        
+                        // 只有当时间不同时才更新，避免循环更新
+                        if (window.solanaTracker.holderRewardDate && 
+                            window.solanaTracker.holderRewardDate.getTime() !== newHolderRewardDate.getTime()) {
+                            
+                            window.solanaTracker.holderRewardDate = newHolderRewardDate;
+                            gameData.holderRewardEnded = data.holderRewardEnded || false;
+                            
+                            console.log('从Firebase同步持仓奖励倒计时状态:', {
+                                holderRewardDate: window.solanaTracker.holderRewardDate,
+                                holderRewardEnded: gameData.holderRewardEnded
                             });
                         }
                     }
@@ -2437,8 +2567,9 @@
                         // 保存到Firebase
                         window.solanaTracker.saveCountdownToFirebaseImmediate();
                         
+                        // 更新倒计时显示，但不立即触发弹窗
                         window.solanaTracker.updateCountdown();
-                        console.log('管理面板指令：倒计时归零');
+                        console.log('管理面板指令：倒计时归零，等待自然触发弹窗');
                     }
                 }
             });
