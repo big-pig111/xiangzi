@@ -262,12 +262,16 @@ class UIManager {
         this.fetchTopHolders(tokenMint);
         
         this.topHoldersInterval = setInterval(() => {
-            this.topHoldersCountdown--;
-            this.updateTopHoldersCountdown();
-            
-            if (this.topHoldersCountdown <= 0) {
-                this.fetchTopHolders(tokenMint);
-                this.topHoldersCountdown = CONFIG.ui.holdersRefreshInterval;
+            try {
+                this.topHoldersCountdown--;
+                this.updateTopHoldersCountdown();
+                
+                if (this.topHoldersCountdown <= 0) {
+                    this.fetchTopHolders(tokenMint);
+                    this.topHoldersCountdown = CONFIG.ui.holdersRefreshInterval;
+                }
+            } catch (error) {
+                console.error('Top holders refresh error:', error);
             }
         }, 1000);
     }
@@ -330,24 +334,38 @@ class UIManager {
         }
         
         try {
-            // 验证前20持有者资格
-            const top20Eligibility = await this.validateTop20Eligibility(walletAddress);
-            if (top20Eligibility.eligible) {
-                document.getElementById('top20Status').innerHTML = '<span class="text-green-400">✅ 符合前20名条件</span>';
-                document.getElementById('claimTop20Btn').disabled = false;
-            } else {
-                document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 不符合前20名条件</span>';
-                document.getElementById('claimTop20Btn').disabled = true;
-            }
+            // 加载轮次选择器
+            await this.loadHolderRewardRoundsList();
             
-            // 验证最后成功地址资格
-            const lastSuccessEligibility = await this.validateLastSuccessEligibility(walletAddress);
-            if (lastSuccessEligibility.eligible) {
-                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-green-400">✅ 符合最后成功地址条件</span>';
-                document.getElementById('claimLastSuccessBtn').disabled = false;
+            // 获取用户可领取的奖励
+            const claimableRewards = await window.firebaseService.getUserClaimableRewards(walletAddress);
+            
+            if (claimableRewards.success) {
+                const data = claimableRewards.data;
+                
+                // 更新前20名状态
+                if (data.totalTop20 > 0) {
+                    document.getElementById('top20Status').innerHTML = `<span class="text-green-400">✅ 可领取前20名奖励: ${data.totalTop20} 轮次</span>`;
+                    document.getElementById('claimTop20Btn').disabled = false;
+                } else {
+                    document.getElementById('top20Status').innerHTML = '<span class="text-gray-400">⏳ 暂无可领取的前20名奖励</span>';
+                    document.getElementById('claimTop20Btn').disabled = true;
+                }
+                
+                // 更新最后成功状态
+                if (data.totalCountdown > 0) {
+                    document.getElementById('lastSuccessStatus').innerHTML = `<span class="text-green-400">✅ 可领取最后成功奖励: ${data.totalCountdown} 轮次</span>`;
+                    document.getElementById('claimLastSuccessBtn').disabled = false;
+                } else {
+                    document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-gray-400">⏳ 暂无可领取的最后成功奖励</span>';
+                    document.getElementById('claimLastSuccessBtn').disabled = true;
+                }
+                
+                // 更新积分显示
+                await this.updateScoreDisplay();
             } else {
-                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 不符合最后成功地址条件</span>';
-                document.getElementById('claimLastSuccessBtn').disabled = true;
+                document.getElementById('top20Status').innerHTML = '<span class="text-red-400">❌ 获取奖励信息失败</span>';
+                document.getElementById('lastSuccessStatus').innerHTML = '<span class="text-red-400">❌ 获取奖励信息失败</span>';
             }
             
         } catch (error) {
@@ -394,10 +412,49 @@ class UIManager {
     }
     
     // 加载持仓奖励历史
-    loadHolderRewardRoundsList() {
-        const historyElement = document.getElementById('holderRewardHistory');
-        if (historyElement) {
-            historyElement.innerHTML = '<div class="text-gray-500 italic">暂无历史记录</div>';
+    async loadHolderRewardRoundsList() {
+        try {
+            const roundSelector = document.getElementById('roundSelector');
+            const historyElement = document.getElementById('holderRewardHistory');
+            
+            if (!roundSelector || !historyElement) return;
+            
+            // 获取所有持仓奖励轮次
+            const result = await window.firebaseService.getAllHolderRewardRounds();
+            
+            if (result.success && result.data.length > 0) {
+                // 清空选择器
+                roundSelector.innerHTML = '<option value="">自动选择最新轮次</option>';
+                
+                // 添加轮次选项
+                result.data.forEach(round => {
+                    const option = document.createElement('option');
+                    option.value = round.roundId;
+                    option.textContent = `轮次 ${round.roundId} - ${new Date(round.timestamp).toLocaleString('zh-CN')}`;
+                    roundSelector.appendChild(option);
+                });
+                
+                // 更新历史记录
+                let historyHTML = '';
+                result.data.slice(0, 5).forEach(round => {
+                    historyHTML += `<div class="text-gray-300">• 轮次 ${round.roundId}: ${new Date(round.timestamp).toLocaleString('zh-CN')}</div>`;
+                });
+                historyElement.innerHTML = historyHTML;
+            } else {
+                roundSelector.innerHTML = '<option value="">暂无可用轮次</option>';
+                historyElement.innerHTML = '<div class="text-gray-500 italic">暂无历史记录</div>';
+            }
+        } catch (error) {
+            console.error('加载持仓奖励轮次失败:', error);
+            const roundSelector = document.getElementById('roundSelector');
+            const historyElement = document.getElementById('holderRewardHistory');
+            
+            if (roundSelector) {
+                roundSelector.innerHTML = '<option value="">加载失败</option>';
+            }
+            if (historyElement) {
+                historyElement.innerHTML = '<div class="text-red-400">加载失败</div>';
+            }
         }
     }
     
@@ -411,14 +468,36 @@ class UIManager {
     
     // 更新积分显示
     async updateScoreDisplay() {
-        const currentScoreElement = document.getElementById('currentScore');
-        const exchangeableTokensElement = document.getElementById('exchangeableTokens');
-        
-        if (currentScoreElement) {
-            currentScoreElement.textContent = '0';
-        }
-        if (exchangeableTokensElement) {
-            exchangeableTokensElement.textContent = '0';
+        try {
+            if (!window.walletManager || !window.walletManager.isConnected) {
+                return;
+            }
+            
+            const walletAddress = window.walletManager.getWalletAddress();
+            if (!walletAddress) {
+                return;
+            }
+            
+            // 获取用户积分信息
+            const result = await window.firebaseService.getUserClaimableRewards(walletAddress);
+            
+            if (result.success) {
+                const data = result.data;
+                const currentScore = data.currentScore || 0;
+                const exchangeableTokens = Math.floor(currentScore / 10); // 1积分 = 10代币
+                
+                const currentScoreElement = document.getElementById('currentScore');
+                const exchangeableTokensElement = document.getElementById('exchangeableTokens');
+                
+                if (currentScoreElement) {
+                    currentScoreElement.textContent = currentScore.toString();
+                }
+                if (exchangeableTokensElement) {
+                    exchangeableTokensElement.textContent = exchangeableTokens.toString();
+                }
+            }
+        } catch (error) {
+            console.error('更新积分显示失败:', error);
         }
     }
     
@@ -436,13 +515,38 @@ class UIManager {
                 return;
             }
             
-            // 这里应该调用Firebase或API来领取奖励
-            console.log('领取前20名奖励:', walletAddress);
-            this.showSuccess('奖励领取成功！');
+            // 获取当前轮次
+            const roundSelector = document.getElementById('roundSelector');
+            const selectedRoundId = roundSelector ? roundSelector.value : null;
+            
+            if (!selectedRoundId) {
+                this.showError('请选择要领取的轮次');
+                return;
+            }
+            
+            // 验证资格
+            const eligibility = await window.firebaseService.validateTop20Eligibility(walletAddress, selectedRoundId);
+            
+            if (!eligibility.eligible) {
+                this.showError(`❌ 您没有资格领取前20名奖励：\n${eligibility.reason}`);
+                return;
+            }
+            
+            // 调用Firebase函数领取奖励
+            const result = await window.firebaseService.claimGameReward(walletAddress, selectedRoundId, 'top20');
+            
+            if (result.success) {
+                this.showSuccess(`🏆 前20名奖励领取成功！\n获得 3000 积分\n当前总积分: ${result.data.newScore || 0}\n\n您可以使用积分兑换代币！`);
+                
+                // 更新奖励页面数据
+                await this.updateRewardPageData();
+            } else {
+                this.showError('❌ 奖励领取失败: ' + (result.message || '未知错误'));
+            }
             
         } catch (error) {
             console.error('领取前20名奖励失败:', error);
-            this.showError('领取奖励失败');
+            this.showError('领取奖励失败: ' + error.message);
         }
     }
     
@@ -460,13 +564,38 @@ class UIManager {
                 return;
             }
             
-            // 这里应该调用Firebase或API来领取奖励
-            console.log('领取最后成功奖励:', walletAddress);
-            this.showSuccess('奖励领取成功！');
+            // 获取最新游戏轮次
+            const latestRound = await window.firebaseService.getLatestGameRound();
+            if (!latestRound.success || !latestRound.data) {
+                this.showError('无法获取游戏轮次信息');
+                return;
+            }
+            
+            const roundId = latestRound.data.roundId;
+            
+            // 验证资格
+            const eligibility = await window.firebaseService.validateLastSuccessEligibility(walletAddress, roundId);
+            
+            if (!eligibility.eligible) {
+                this.showError(`❌ 您没有资格领取最后倒计时奖励：\n${eligibility.reason}`);
+                return;
+            }
+            
+            // 调用Firebase函数领取奖励
+            const result = await window.firebaseService.claimGameReward(walletAddress, roundId, 'countdown');
+            
+            if (result.success) {
+                this.showSuccess(`💰 最后倒计时奖励领取成功！\n获得 10000 积分\n当前总积分: ${result.data.newScore || 0}\n\n您可以使用积分兑换代币！`);
+                
+                // 更新奖励页面数据
+                await this.updateRewardPageData();
+            } else {
+                this.showError('❌ 奖励领取失败: ' + (result.message || '未知错误'));
+            }
             
         } catch (error) {
             console.error('领取最后成功奖励失败:', error);
-            this.showError('领取奖励失败');
+            this.showError('领取奖励失败: ' + error.message);
         }
     }
     
@@ -489,19 +618,41 @@ class UIManager {
                 return;
             }
             
-            // 这里应该调用API来验证地址资格
             verifyResult.innerHTML = '<span class="text-yellow-400">验证中...</span>';
             
-            // 模拟验证过程
-            setTimeout(() => {
-                verifyResult.innerHTML = '<span class="text-green-400">✅ 地址验证完成</span>';
-            }, 1000);
+            // 获取用户可领取的奖励
+            const result = await window.firebaseService.getUserClaimableRewards(address);
+            
+            if (result.success) {
+                const data = result.data;
+                let verificationText = '<div class="text-green-400">✅ 地址验证完成</div>';
+                
+                if (data.totalTop20 > 0 || data.totalCountdown > 0) {
+                    verificationText += '<div class="text-memeYellow mt-2">可领取奖励:</div>';
+                    
+                    if (data.totalTop20 > 0) {
+                        verificationText += `<div class="text-memePink">• 前20名奖励: ${data.totalTop20} 轮次</div>`;
+                    }
+                    
+                    if (data.totalCountdown > 0) {
+                        verificationText += `<div class="text-memePink">• 最后成功奖励: ${data.totalCountdown} 轮次</div>`;
+                    }
+                    
+                    verificationText += '<div class="text-memeGreen mt-2">请连接钱包后领取奖励</div>';
+                } else {
+                    verificationText += '<div class="text-gray-400 mt-2">暂无可领取的奖励</div>';
+                }
+                
+                verifyResult.innerHTML = verificationText;
+            } else {
+                verifyResult.innerHTML = '<span class="text-red-400">验证失败: ' + (result.message || '未知错误') + '</span>';
+            }
             
         } catch (error) {
             console.error('验证地址失败:', error);
             const verifyResult = document.getElementById('verifyResult');
             if (verifyResult) {
-                verifyResult.innerHTML = '<span class="text-red-400">验证失败</span>';
+                verifyResult.innerHTML = '<span class="text-red-400">验证失败: ' + error.message + '</span>';
             }
         }
     }
