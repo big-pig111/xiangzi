@@ -345,6 +345,153 @@ class FirebaseService {
             return Utils.handleError(error, `callFunction:${functionName}`);
         }
     }
+    
+    // 领取游戏奖励
+    async claimGameReward(wallet, roundId, rewardType) {
+        if (!this.initialized) throw new Error('Firebase未初始化');
+        
+        try {
+            const result = await this.callFunction('claimGameReward', {
+                wallet: wallet,
+                roundId: roundId,
+                rewardType: rewardType
+            });
+            
+            if (result.success) {
+                console.log('奖励领取成功:', result.data);
+                return result;
+            } else {
+                throw new Error(result.message || '领取奖励失败');
+            }
+        } catch (error) {
+            console.error('领取游戏奖励失败:', error);
+            return Utils.handleError(error, 'claimGameReward');
+        }
+    }
+    
+    // 获取用户可领取的奖励
+    async getUserClaimableRewards(wallet) {
+        if (!this.initialized) throw new Error('Firebase未初始化');
+        
+        try {
+            const result = await this.callFunction('getUserClaimableRewards', {
+                wallet: wallet
+            });
+            
+            if (result.success) {
+                console.log('用户可领取奖励获取成功:', result.data);
+                return result;
+            } else {
+                throw new Error(result.message || '获取可领取奖励失败');
+            }
+        } catch (error) {
+            console.error('获取用户可领取奖励失败:', error);
+            return Utils.handleError(error, 'getUserClaimableRewards');
+        }
+    }
+    
+    // 验证用户是否有资格领取前20名奖励
+    async validateTop20Eligibility(wallet, roundId) {
+        if (!this.initialized) throw new Error('Firebase未初始化');
+        
+        try {
+            // 检查是否已经领取过
+            const claimedSnapshot = await this.database.ref(`claimedRewards/top20/${roundId}/${wallet}`).once('value');
+            if (claimedSnapshot.exists()) {
+                return {
+                    eligible: false,
+                    reason: '已领取过此轮次奖励',
+                    roundId: roundId
+                };
+            }
+            
+            // 检查是否在前20名中
+            const roundSnapshot = await this.database.ref(`holderRewardRounds/${roundId}`).once('value');
+            if (!roundSnapshot.exists()) {
+                return {
+                    eligible: false,
+                    reason: '轮次未找到',
+                    roundId: roundId
+                };
+            }
+            
+            const roundData = roundSnapshot.val();
+            const top20Addresses = roundData.top20Addresses || [];
+            const isInTop20 = top20Addresses.some(addr => addr.toLowerCase() === wallet.toLowerCase());
+            
+            if (isInTop20) {
+                return {
+                    eligible: true,
+                    reason: '符合前20名奖励条件',
+                    roundId: roundId
+                };
+            } else {
+                return {
+                    eligible: false,
+                    reason: '不在前20名持有者中',
+                    roundId: roundId
+                };
+            }
+        } catch (error) {
+            console.error('验证前20名资格失败:', error);
+            return {
+                eligible: false,
+                reason: '验证失败: ' + error.message,
+                roundId: roundId
+            };
+        }
+    }
+    
+    // 验证用户是否有资格领取最后倒计时奖励
+    async validateLastSuccessEligibility(wallet, roundId) {
+        if (!this.initialized) throw new Error('Firebase未初始化');
+        
+        try {
+            // 检查是否已经领取过
+            const claimedSnapshot = await this.database.ref(`claimedRewards/countdown/${roundId}/${wallet}`).once('value');
+            if (claimedSnapshot.exists()) {
+                return {
+                    eligible: false,
+                    reason: '已领取过此轮次奖励',
+                    roundId: roundId
+                };
+            }
+            
+            // 检查是否是最后成功地址
+            const roundSnapshot = await this.database.ref(`gameRounds/${roundId}`).once('value');
+            if (!roundSnapshot.exists()) {
+                return {
+                    eligible: false,
+                    reason: '轮次未找到',
+                    roundId: roundId
+                };
+            }
+            
+            const roundData = roundSnapshot.val();
+            const lastSuccessAddress = roundData.lastBigBuyAddress;
+            
+            if (lastSuccessAddress && lastSuccessAddress.toLowerCase() === wallet.toLowerCase()) {
+                return {
+                    eligible: true,
+                    reason: '符合最后成功奖励条件',
+                    roundId: roundId
+                };
+            } else {
+                return {
+                    eligible: false,
+                    reason: '不是最后成功地址',
+                    roundId: roundId
+                };
+            }
+        } catch (error) {
+            console.error('验证最后成功资格失败:', error);
+            return {
+                eligible: false,
+                reason: '验证失败: ' + error.message,
+                roundId: roundId
+            };
+        }
+    }
 
     // 断开连接
     disconnect() {
