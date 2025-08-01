@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meme Coin Countdown - 重构版</title>
+    <title>Meme Coin Countdown - Refactored Version</title>
     
     <!-- 外部依赖 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -53,7 +53,7 @@
     
     <!-- 主容器 -->
     <div class="container mx-auto px-4 py-8 relative z-10">
-        <!-- 顶部标题 -->
+        <!-- Top Title -->
         <header class="text-center mb-6">
             <h1 class="text-6xl md:text-8xl font-bold text-memeYellow text-shadow-meme mb-4 transform hover:scale-105 transition-transform duration-300">
                 🚀 MOON LAUNCH 🚀
@@ -63,87 +63,87 @@
             </p>
         </header>
         
-        <!-- 主要内容区域 -->
+                <!-- Main Content Area -->
         <div class="flex flex-col lg:flex-row gap-6">
-            <!-- 左侧面板 -->
+            <!-- Left Panel -->
             <div class="lg:w-1/4 space-y-4">
-                <!-- 成功增加倒计时地址区域 -->
+                <!-- Successful Countdown Increase Addresses Area -->
                 <div class="bg-gray-800 border-meme p-4 rounded-xl shadow-lg">
-                    <h3 class="text-memeYellow font-bold text-lg mb-3">💰 成功增加倒计时地址</h3>
+                    <h3 class="text-memeYellow font-bold text-lg mb-3">💰 Successful Countdown Increase Addresses</h3>
                     <ul id="successAddressesList" class="space-y-2 max-h-60 overflow-y-auto">
-                        <li class="text-gray-400 text-sm italic">等待大额买入...</li>
+                        <li class="text-gray-400 text-sm italic">Waiting for large purchases...</li>
                     </ul>
                 </div>
                 
-                <!-- 钱包连接区域 -->
+                <!-- Wallet Connection Area -->
                 <div class="bg-gray-800 border-meme p-4 rounded-xl shadow-lg">
-                    <h3 class="text-memeYellow font-bold text-lg mb-3">🔗 钱包连接</h3>
+                    <h3 class="text-memeYellow font-bold text-lg mb-3">🔗 Wallet Connection</h3>
                     
-                    <!-- 钱包连接按钮 -->
+                    <!-- Wallet Connection Button -->
                     <button id="walletConnectBtn" class="btn-secondary w-full mb-3">
-                        <span class="text-white">🔗 连接钱包</span>
+                        <span class="text-white">🔗 Connect Wallet</span>
                     </button>
                     
-                    <!-- 钱包状态显示 -->
+                    <!-- Wallet Status Display -->
                     <div id="walletStatus" class="text-gray-400 text-sm mb-3">
-                        <span class="font-bold">未连接</span>
+                        <span class="font-bold">Not Connected</span>
                     </div>
                     
-                    <!-- 持仓奖励倒计时显示 -->
+                    <!-- Holder Reward Countdown Display -->
                     <div class="bg-gray-700 border-meme p-3 rounded-lg mb-3">
                         <div class="text-center">
-                            <div class="text-memeYellow font-bold text-sm mb-1">🏆 持仓奖励倒计时</div>
+                            <div class="text-memeYellow font-bold text-sm mb-1">🏆 Holder Reward Countdown</div>
                             <div id="holderRewardCountdown" class="text-xl font-bold text-memePink">20:00</div>
-                            <div class="text-gray-300 text-xs">每3分钟快照一次</div>
-                            <div class="text-memeBlue text-xs">🌐 全球同步</div>
-        </div>
-      </div>
-      
-                    <!-- 功能按钮区域 -->
+                            <div class="text-gray-300 text-xs">Snapshot every 3 minutes</div>
+                            <div class="text-memeBlue text-xs">🌐 Global Sync</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Function Buttons Area -->
                     <div class="space-y-3">
                         <button id="whitepaperBtn" class="btn-success w-full">
-                            <span class="text-white">📄 白皮书</span>
+                            <span class="text-white">📄 Whitepaper</span>
                         </button>
                         
                         <button id="claimRewardBtn" class="btn-primary w-full">
-                            <span class="text-white">🎁 领取奖励</span>
+                            <span class="text-white">🎁 Claim Rewards</span>
                         </button>
-              </div>
-            </div>
+                    </div>
+                </div>
                 
-                <!-- 持仓前20持有者区域 -->
+                <!-- Top 20 Holders Area -->
                 <div class="bg-gray-800 border-meme p-4 rounded-xl shadow-lg">
                     <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-memeYellow font-bold text-base">🏆 持仓前20持有者</h3>
+                        <h3 class="text-memeYellow font-bold text-base">🏆 Top 20 Holders</h3>
                         <div class="flex items-center gap-1">
                             <div id="holdersRefreshCountdown" class="text-memePink font-bold text-xs">10</div>
-                            <span class="text-gray-400 text-xs">秒后刷新</span>
-              </div>
-            </div>
+                            <span class="text-gray-400 text-xs">seconds to refresh</span>
+                        </div>
+                    </div>
                     <ul id="topHoldersList" class="space-y-1 text-xs max-h-60 overflow-y-auto">
-                        <li class="text-gray-400 italic">链上实时查询中...</li>
+                        <li class="text-gray-400 italic">Querying on-chain in real-time...</li>
                     </ul>
-              </div>
+                </div>
             </div>
             
-            <!-- 中央主要内容 -->
+                        <!-- Central Main Content -->
             <div class="lg:w-1/2 space-y-6">
-                <!-- 倒计时主体 -->
+                <!-- Countdown Main Body -->
                 <div class="bg-gradient-to-br from-gray-800 to-gray-900 p-8 md:p-12 relative border-meme rounded-xl">
-                    <!-- 装饰元素 -->
+                    <!-- Decorative Elements -->
                     <div class="absolute -top-6 -left-6 bg-memePink p-3 rotate-random border-meme rounded-lg">
                         <i class="fa fa-diamond text-white text-2xl"></i>
                     </div>
                     <div class="absolute -bottom-6 -right-6 bg-memeBlue p-3 rotate-random-reverse border-meme rounded-lg">
                         <i class="fa fa-rocket text-white text-2xl"></i>
-              </div>
+                    </div>
                     
                     <h2 class="text-center text-3xl md:text-4xl text-memePink mb-8">
                         Time Until Launch
                     </h2>
                     <p class="text-center text-memeYellow text-sm mb-4">
-                        🌐 全球共享倒计时 - 所有玩家同步
-                        <span id="syncStatusIndicator" class="ml-2 text-green-400">🟢 已连接</span>
+                        🌐 Global Shared Countdown - All Players Synchronized
+                        <span id="syncStatusIndicator" class="ml-2 text-green-400">🟢 Connected</span>
                     </p>
                     
                     <div id="countdown" class="grid grid-cols-2 gap-4 md:gap-8">
@@ -161,99 +161,99 @@
         </div>
       </div>
       
-                <!-- 代币交易检测区域 -->
+                                <!-- Token Transaction Detection Area -->
                 <div class="bg-gradient-to-br from-gray-800 to-gray-900 p-8 md:p-12 relative border-meme rounded-xl">
-                    <!-- 装饰元素 -->
+                    <!-- Decorative Elements -->
                     <div class="absolute -top-6 -left-6 bg-memeGreen p-3 rotate-random border-meme rounded-lg">
                         <i class="fa fa-bitcoin text-white text-2xl"></i>
-        </div>
+                    </div>
                     <div class="absolute -bottom-6 -right-6 bg-memeYellow p-3 rotate-random-reverse border-meme rounded-lg">
                         <i class="fa fa-exchange text-black text-2xl"></i>
-        </div>
+                    </div>
                     
                     <h2 class="text-center text-3xl md:text-4xl text-memeGreen mb-8">
-                        🚀 Solana实时交易检测器 🚀
+                        🚀 Solana Real-time Transaction Detector 🚀
                     </h2>
                     
-                    <!-- 代币地址显示 -->
+                    <!-- Token Address Display -->
                     <div class="mb-8">
                         <div class="bg-gray-700 border-meme p-6 rounded-lg">
-                            <label class="block text-memeYellow font-bold mb-3">当前检测代币</label>
+                            <label class="block text-memeYellow font-bold mb-3">Currently Detected Token</label>
                             <div class="flex gap-4 flex-wrap items-center">
                                 <input 
                                     type="text" 
                                     id="tokenAddress" 
-                                    placeholder="等待管理面板设置代币地址..."
+                                    placeholder="Waiting for admin panel to set token address..."
                                     class="flex-1 min-w-64 p-3 bg-gray-600 border-2 border-gray-500 rounded-lg text-white placeholder-gray-400 focus:border-memeYellow focus:outline-none"
                                     readonly
                                 >
-        </div>
-      </div>
-    </div>
-    
-                    <!-- 交易检测状态 -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <!-- 检测状态 -->
-                        <div class="bg-memeBlue border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
-                            <div class="text-3xl mb-2">📡</div>
-                            <div class="text-xl font-bold text-black mb-2">检测状态</div>
-                            <div id="detectionStatus" class="text-lg font-bold text-black">🔴 等待管理面板开启</div>
-    </div>
-    
-                        <!-- 交易次数 -->
-                        <div class="bg-memePurple border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
-                            <div class="text-3xl mb-2">📊</div>
-                            <div class="text-xl font-bold text-white mb-2">交易次数</div>
-                            <div id="transactionCount" class="text-2xl font-bold text-white">0</div>
-  </div>
-  
-                        <!-- 倒计时调整 -->
-                        <div class="bg-memePink border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
-                            <div class="text-3xl mb-2">⏰</div>
-                            <div class="text-xl font-bold text-black mb-2">倒计时调整</div>
-                            <div id="timeAdjustment" class="text-lg font-bold text-black">+0 秒</div>
-  </div>
-  
-                        <!-- RPC状态 -->
-                        <div class="bg-memeYellow border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
-                            <div class="text-3xl mb-2">🌐</div>
-                            <div class="text-xl font-bold text-black mb-2">RPC状态</div>
-                            <div id="rpcStatus" class="text-lg font-bold text-black">未选择</div>
-                        </div>
-  </div>
-
-                    <!-- 交易日志 -->
-                    <div class="bg-gray-700 border-meme p-4 max-h-60 overflow-y-auto rounded-lg">
-                        <h3 class="text-memeYellow font-bold mb-3">📝 交易日志</h3>
-                        <div id="transactionLog" class="log-entry">
-                            <div class="text-gray-500 italic">等待交易检测...</div>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- 详细交易记录表格 -->
+                    <!-- Transaction Detection Status -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <!-- Detection Status -->
+                        <div class="bg-memeBlue border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
+                            <div class="text-3xl mb-2">📡</div>
+                            <div class="text-xl font-bold text-black mb-2">Detection Status</div>
+                            <div id="detectionStatus" class="text-lg font-bold text-black">🔴 Waiting for admin panel</div>
+    </div>
+    
+                                                <!-- Transaction Count -->
+                        <div class="bg-memePurple border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
+                            <div class="text-3xl mb-2">📊</div>
+                            <div class="text-xl font-bold text-white mb-2">Transaction Count</div>
+                            <div id="transactionCount" class="text-2xl font-bold text-white">0</div>
+                        </div>
+                        
+                        <!-- Countdown Adjustment -->
+                        <div class="bg-memePink border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
+                            <div class="text-3xl mb-2">⏰</div>
+                            <div class="text-xl font-bold text-black mb-2">Countdown Adjustment</div>
+                            <div id="timeAdjustment" class="text-lg font-bold text-black">+0 seconds</div>
+                        </div>
+                        
+                        <!-- RPC Status -->
+                        <div class="bg-memeYellow border-meme p-6 text-center transform hover:scale-105 transition-all duration-300 glow rounded-lg">
+                            <div class="text-3xl mb-2">🌐</div>
+                            <div class="text-xl font-bold text-black mb-2">RPC Status</div>
+                            <div id="rpcStatus" class="text-lg font-bold text-black">Not Selected</div>
+                        </div>
+                    </div>
+
+                    <!-- Transaction Log -->
+                    <div class="bg-gray-700 border-meme p-4 max-h-60 overflow-y-auto rounded-lg">
+                        <h3 class="text-memeYellow font-bold mb-3">📝 Transaction Log</h3>
+                        <div id="transactionLog" class="log-entry">
+                            <div class="text-gray-500 italic">Waiting for transaction detection...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Transaction Records Table -->
                     <div class="bg-gray-700 border-meme p-4 mt-4 max-h-80 overflow-y-auto rounded-lg">
                         <div class="flex justify-between items-center mb-3">
-                            <h3 class="text-memeYellow font-bold">📊 详细交易记录</h3>
+                            <h3 class="text-memeYellow font-bold">📊 Detailed Transaction Records</h3>
                             <div class="flex items-center gap-2">
-                                <span id="detailedCount" class="text-xs text-memeYellow font-bold">0 条记录</span>
+                                <span id="detailedCount" class="text-xs text-memeYellow font-bold">0 records</span>
                                 <div id="syncIndicator" class="status-indicator default"></div>
-                                <span id="syncStatus" class="text-xs text-gray-400">等待同步...</span>
+                                <span id="syncStatus" class="text-xs text-gray-400">Waiting for sync...</span>
                             </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th>时间</th>
-                                        <th>类型</th>
-                                        <th>数量</th>
-                                        <th>交易者</th>
-                                        <th>交易哈希</th>
+                                        <th>Time</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Trader</th>
+                                        <th>Transaction Hash</th>
                                     </tr>
                                 </thead>
                                 <tbody id="detailedTransactionTable">
                                     <tr>
-                                        <td colspan="6" class="text-center text-gray-500 italic p-4">暂无交易记录</td>
+                                        <td colspan="6" class="text-center text-gray-500 italic p-4">No transaction records</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -262,9 +262,9 @@
                 </div>
             </div>
             
-            <!-- 右侧面板 -->
+            <!-- Right Panel -->
             <div class="lg:w-1/4 space-y-4">
-                <!-- 信息区域 -->
+                <!-- Information Area -->
                 <div class="bg-gray-800 border-meme p-6 rotate-random rounded-xl">
                     <h3 class="text-2xl md:text-3xl text-memeYellow mb-4">Why This Meme Coin?</h3>
                     <p class="text-white text-lg mb-4">Because why not? It's a meme coin, just like all the others, but <span class="text-memePink font-bold">this one is going to the moon!</span></p>
@@ -273,7 +273,7 @@
                     </button>
                 </div>
                 
-                <!-- 社交媒体分享 -->
+                <!-- Social Media Sharing -->
                 <div class="bg-gray-800 border-meme p-6 rounded-xl">
                     <p class="text-white text-xl mb-4 text-center">SHARE THE HYPE!</p>
                     <div class="flex justify-center gap-4">
@@ -294,165 +294,165 @@
             </div>
         </div>
         
-        <!-- 页脚 -->
+        <!-- Footer -->
         <footer class="mt-20 text-center text-gray-500 text-sm">
             <p>Disclaimer: This is a meme website. Not financial advice. Don't actually invest your life savings.</p>
             <p class="mt-2">🚀 To the moon and beyond! 🚀</p>
         </footer>
     </div>
     
-    <!-- 领取奖励页面 -->
+    <!-- Claim Rewards Page -->
     <div id="rewardPage" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] hidden">
         <div class="bg-gray-800 border-meme p-6 rounded-xl shadow-lg w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-6">
-                <h3 class="text-memeYellow font-bold text-2xl">🎁 领取奖励</h3>
+                <h3 class="text-memeYellow font-bold text-2xl">🎁 Claim Rewards</h3>
                 <button class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
             
-            <!-- 奖励信息展示区域 -->
+            <!-- Reward Information Display Area -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <!-- 持仓前20持有者奖励 -->
+                <!-- Top 20 Holders Reward -->
                 <div class="bg-gray-700 border-meme p-4 rounded-lg">
                     <div class="flex items-center mb-3">
                         <span class="text-2xl mr-2">🏆</span>
-                        <h4 class="text-memeYellow font-bold text-lg">持仓前20持有者奖励</h4>
+                        <h4 class="text-memeYellow font-bold text-lg">Top 20 Holders Reward</h4>
                     </div>
                     <div class="text-gray-300 text-sm mb-3">
-                        <p>持有代币数量排名前20的地址，每人可获得特殊奖励（每3分钟快照一次，可随时领取）</p>
+                        <p>Addresses ranked in the top 20 by token holdings can receive special rewards (snapshot every 3 minutes, can be claimed anytime)</p>
                     </div>
                     <div class="bg-gray-600 p-3 rounded mb-3">
-                        <div class="text-memePink font-bold mb-2">当前状态：</div>
+                        <div class="text-memePink font-bold mb-2">Current Status:</div>
                         <div id="top20Status" class="text-gray-300 text-sm">
-                            <span class="text-yellow-400">⏳ 等待持仓数据...</span>
+                            <span class="text-yellow-400">⏳ Waiting for holder data...</span>
                         </div>
                     </div>
                     <div class="bg-gray-600 p-3 rounded mb-3">
-                        <div class="text-memePink font-bold mb-2">选择轮次：</div>
+                        <div class="text-memePink font-bold mb-2">Select Round:</div>
                         <select id="roundSelector" class="w-full p-2 bg-gray-700 border border-gray-500 rounded text-white text-sm">
-                            <option value="">自动选择最新轮次</option>
+                            <option value="">Auto-select latest round</option>
                         </select>
                     </div>
                     <button id="claimTop20Btn" class="w-full bg-memeGreen hover:bg-green-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <span class="text-white">🏆 领取前20名奖励</span>
+                        <span class="text-white">🏆 Claim Top 20 Reward</span>
                     </button>
                 </div>
                 
-                <!-- 最后成功增加倒计时地址奖励 -->
+                <!-- Last Successful Countdown Address Reward -->
                 <div class="bg-gray-700 border-meme p-4 rounded-lg">
                     <div class="flex items-center mb-3">
                         <span class="text-2xl mr-2">💰</span>
-                        <h4 class="text-memeYellow font-bold text-lg">最后倒计时奖励</h4>
+                        <h4 class="text-memeYellow font-bold text-lg">Last Countdown Reward</h4>
                     </div>
                     <div class="text-gray-300 text-sm mb-3">
-                        <p>最后一个成功增加倒计时时间的地址可获得额外奖励（可随时领取）</p>
+                        <p>The last address that successfully increased countdown time can receive additional rewards (can be claimed anytime)</p>
                     </div>
                     <div class="bg-gray-600 p-3 rounded mb-3">
-                        <div class="text-memePink font-bold mb-2">当前状态：</div>
+                        <div class="text-memePink font-bold mb-2">Current Status:</div>
                         <div id="lastSuccessStatus" class="text-gray-300 text-sm">
-                            <span class="text-yellow-400">⏳ 等待大额买入数据...</span>
+                            <span class="text-yellow-400">⏳ Waiting for large purchase data...</span>
                         </div>
                     </div>
                     <button id="claimLastSuccessBtn" class="w-full bg-memePink hover:bg-pink-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <span class="text-white">💰 领取最后倒计时奖励</span>
+                        <span class="text-white">💰 Claim Last Countdown Reward</span>
                     </button>
                 </div>
             </div>
             
-            <!-- 地址验证区域 -->
+            <!-- Address Verification Area -->
             <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
                 <div class="flex items-center mb-3">
                     <span class="text-2xl mr-2">🔍</span>
-                    <h4 class="text-memeYellow font-bold text-lg">地址验证</h4>
+                    <h4 class="text-memeYellow font-bold text-lg">Address Verification</h4>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-gray-300 text-sm mb-2">输入钱包地址</label>
-                        <input type="text" id="verifyAddressInput" placeholder="输入要验证的钱包地址" class="w-full p-3 bg-gray-600 border-2 border-gray-500 rounded-lg text-white placeholder-gray-400 focus:border-memeYellow focus:outline-none">
+                        <label class="block text-gray-300 text-sm mb-2">Enter Wallet Address</label>
+                        <input type="text" id="verifyAddressInput" placeholder="Enter wallet address to verify" class="w-full p-3 bg-gray-600 border-2 border-gray-500 rounded-lg text-white placeholder-gray-400 focus:border-memeYellow focus:outline-none">
                     </div>
                     <div class="flex items-end">
                         <button id="verifyAddressBtn" class="w-full bg-memeBlue hover:bg-blue-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300">
-                            <span class="text-white">🔍 验证地址</span>
+                            <span class="text-white">🔍 Verify Address</span>
                         </button>
                     </div>
                     <div class="flex items-end">
                         <div id="verifyResult" class="w-full p-3 bg-gray-600 rounded-lg text-sm">
-                            <span class="text-gray-400">等待验证...</span>
+                            <span class="text-gray-400">Waiting for verification...</span>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- 积分兑换区域 -->
+            <!-- Points Exchange Area -->
             <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
                 <div class="flex items-center mb-3">
                     <span class="text-2xl mr-2">🪙</span>
-                    <h4 class="text-memeYellow font-bold text-lg">积分兑换代币</h4>
+                    <h4 class="text-memeYellow font-bold text-lg">Exchange Points for Tokens</h4>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <h5 class="text-memePink font-bold mb-2">当前积分状态</h5>
+                        <h5 class="text-memePink font-bold mb-2">Current Points Status</h5>
                         <div id="scoreDetails" class="text-gray-300 text-sm space-y-1">
-                            <div>• 当前积分：<span id="currentScore">0</span></div>
-                            <div>• 可兑换代币：<span id="exchangeableTokens">0</span></div>
-                            <div>• 兑换比例：1积分 = 10代币</div>
+                            <div>• Current Points: <span id="currentScore">0</span></div>
+                            <div>• Exchangeable Tokens: <span id="exchangeableTokens">0</span></div>
+                            <div>• Exchange Rate: 1 point = 10 tokens</div>
                         </div>
                     </div>
                     <div class="flex items-center justify-center">
                         <button id="claimTokenBtn" class="w-full bg-memeGreen hover:bg-green-600 text-white font-bold py-3 px-4 rounded border-meme transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span class="text-white">🪙 兑换代币</span>
+                            <span class="text-white">🪙 Exchange Tokens</span>
                         </button>
                     </div>
                 </div>
                 <div class="text-gray-400 text-xs">
-                    💡 提示：领取游戏奖励后，您将获得积分。使用积分可以兑换真实的代币到您的钱包！
+                    💡 Tip: After claiming game rewards, you will receive points. Use points to exchange for real tokens to your wallet!
                 </div>
             </div>
             
-            <!-- 奖励详情展示 -->
+            <!-- Reward Details Display -->
             <div class="bg-gray-700 border-meme p-4 rounded-lg mb-6">
                 <div class="flex items-center mb-3">
                     <span class="text-2xl mr-2">📊</span>
-                    <h4 class="text-memeYellow font-bold text-lg">奖励详情</h4>
+                    <h4 class="text-memeYellow font-bold text-lg">Reward Details</h4>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <h5 class="text-memePink font-bold mb-2">持仓前20持有者</h5>
+                        <h5 class="text-memePink font-bold mb-2">Top 20 Holders</h5>
                         <div id="top20Details" class="text-gray-300 text-sm space-y-1">
-                            <div>• 奖励类型：持仓排名奖励</div>
-                            <div>• 奖励积分：100积分</div>
-                            <div>• 快照频率：每3分钟</div>
-                            <div>• 领取条件：排名前20</div>
+                            <div>• Reward Type: Holder Ranking Reward</div>
+                            <div>• Reward Points: 100 points</div>
+                            <div>• Snapshot Frequency: Every 3 minutes</div>
+                            <div>• Claim Condition: Top 20 ranking</div>
                         </div>
                     </div>
                     <div>
-                        <h5 class="text-memePink font-bold mb-2">最后倒计时奖励</h5>
+                        <h5 class="text-memePink font-bold mb-2">Last Countdown Reward</h5>
                         <div id="lastSuccessDetails" class="text-gray-300 text-sm space-y-1">
-                            <div>• 奖励类型：大额买入奖励</div>
-                            <div>• 奖励积分：50积分</div>
-                            <div>• 触发条件：大额买入</div>
-                            <div>• 领取条件：最后一个成功地址</div>
+                            <div>• Reward Type: Large Purchase Reward</div>
+                            <div>• Reward Points: 50 points</div>
+                            <div>• Trigger Condition: Large purchase</div>
+                            <div>• Claim Condition: Last successful address</div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- 历史记录展示 -->
+            <!-- History Records Display -->
             <div class="bg-gray-700 border-meme p-4 rounded-lg">
                 <div class="flex items-center mb-3">
                     <span class="text-2xl mr-2">📜</span>
-                    <h4 class="text-memeYellow font-bold text-lg">历史记录</h4>
+                    <h4 class="text-memeYellow font-bold text-lg">History Records</h4>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <h5 class="text-memePink font-bold mb-2">持仓奖励历史</h5>
+                        <h5 class="text-memePink font-bold mb-2">Holder Reward History</h5>
                         <div id="holderRewardHistory" class="text-gray-300 text-sm max-h-32 overflow-y-auto">
-                            <div class="text-gray-500 italic">暂无历史记录</div>
+                            <div class="text-gray-500 italic">No history records</div>
                         </div>
                     </div>
                     <div>
-                        <h5 class="text-memePink font-bold mb-2">倒计时奖励历史</h5>
+                        <h5 class="text-memePink font-bold mb-2">Countdown Reward History</h5>
                         <div id="countdownRewardHistory" class="text-gray-300 text-sm max-h-32 overflow-y-auto">
-                            <div class="text-gray-500 italic">暂无历史记录</div>
+                            <div class="text-gray-500 italic">No history records</div>
                         </div>
                     </div>
                 </div>
@@ -460,7 +460,7 @@
         </div>
     </div>
 
-    <!-- 模块化脚本 -->
+    <!-- Modular Scripts -->
     <script src="config.js"></script>
     <script src="utils.js"></script>
     <script src="firebase-service.js"></script>
@@ -470,7 +470,7 @@
     <script src="ui-manager.js"></script>
     <script src="app.js"></script>
 
-    <!-- 白皮书弹窗 -->
+    <!-- Whitepaper Modal -->
     <script src="whitepaper-modal.js"></script>
 </body>
 </html>
