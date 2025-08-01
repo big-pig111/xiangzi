@@ -1,4 +1,4 @@
-// 白皮书弹窗管理器
+// Whitepaper Modal Manager
 class WhitepaperModal {
     constructor() {
         this.isOpen = false;
@@ -8,14 +8,14 @@ class WhitepaperModal {
     }
 
     init() {
-        // 监听来自白皮书页面的关闭消息
+        // Listen for close messages from whitepaper page
         window.addEventListener('message', (event) => {
             if (event.data.type === 'closeWhitepaper') {
                 this.close();
             }
         });
 
-        // 监听ESC键关闭
+        // Listen for ESC key to close
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && this.isOpen) {
                 this.close();

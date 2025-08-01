@@ -1,0 +1,213 @@
+/* Global Styles */
+@import url('https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css');
+
+/* Tailwind Configuration */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Colors and Fonts */
+:root {
+    --meme-yellow: #FFDD00;
+    --meme-pink: #FF2E63;
+    --meme-blue: #08D9D6;
+    --meme-purple: #9D4EDD;
+    --meme-green: #4CAF50;
+}
+
+/* Custom Utility Classes */
+@layer utilities {
+    .text-shadow {
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    .text-shadow-meme {
+        text-shadow: 3px 3px 0px #000;
+    }
+    .border-meme {
+        border: 4px solid #000;
+        border-radius: 12px;
+    }
+    .rotate-random {
+        transform: rotate(-2deg);
+    }
+    .rotate-random-reverse {
+        transform: rotate(2deg);
+    }
+    .glow {
+        box-shadow: 0 0 15px rgba(255, 221, 0, 0.7);
+    }
+}
+
+/* Animation Definitions */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Animation Classes */
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+    animation: spin-slow 8s linear infinite;
+}
+
+/* Responsive Fonts */
+.text-responsive {
+    font-size: clamp(1rem, 4vw, 2rem);
+}
+
+.text-responsive-large {
+    font-size: clamp(2.5rem, 8vw, 5rem);
+}
+
+/* Component Styles */
+.countdown-card {
+    @apply bg-gradient-to-br from-gray-800 to-gray-900 p-8 md:p-12 relative;
+}
+
+.status-indicator {
+    @apply w-2 h-2 rounded-full;
+}
+
+.status-indicator.syncing {
+    @apply bg-yellow-500 animate-pulse;
+}
+
+.status-indicator.success {
+    @apply bg-green-500;
+}
+
+.status-indicator.error {
+    @apply bg-red-500;
+}
+
+.status-indicator.default {
+    @apply bg-gray-500;
+}
+
+/* 面板样式 */
+.fixed-panel {
+    @apply fixed bg-gray-800 border-meme p-4 rounded-xl shadow-lg z-50;
+}
+
+/* Button Styles */
+.btn-primary {
+    background-color: #FF2E63;
+    color: white;
+    font-weight: bold;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 4px solid #000;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #e91e63;
+    transform: scale(1.05);
+}
+
+.btn-secondary {
+    background-color: #08D9D6;
+    color: white;
+    font-weight: bold;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 4px solid #000;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background-color: #00bcd4;
+    transform: scale(1.05);
+}
+
+.btn-success {
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 4px solid #000;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-success:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.modal-content {
+    background-color: #374151;
+    border: 4px solid #000;
+    border-radius: 12px;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 90vw;
+    max-width: 28rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 10000;
+}
+
+/* Table Styles */
+.data-table {
+    @apply w-full text-xs;
+}
+
+.data-table th {
+    @apply text-left p-2 text-memeBlue border-b border-gray-600;
+}
+
+.data-table td {
+    @apply p-2;
+}
+
+/* Log Styles */
+.log-entry {
+    @apply text-sm space-y-2;
+}
+
+.log-entry.info {
+    @apply text-gray-300;
+}
+
+.log-entry.success {
+    @apply text-green-400;
+}
+
+.log-entry.warning {
+    @apply text-yellow-400;
+}
+
+.log-entry.error {
+    @apply text-red-400;
+} 
