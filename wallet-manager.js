@@ -245,17 +245,43 @@ class WalletManager {
         }
         
         try {
-            // OKX wallet might use different API methods
+            // OKX wallet API has changed - try multiple connection methods
             let response;
-            if (typeof window.okxwallet.connect === 'function') {
+            
+            // Method 1: Try the new Solana-specific API
+            if (window.okxwallet.solana && typeof window.okxwallet.solana.connect === 'function') {
+                response = await window.okxwallet.solana.connect();
+            }
+            // Method 2: Try the legacy connect method
+            else if (typeof window.okxwallet.connect === 'function') {
                 response = await window.okxwallet.connect();
-            } else if (typeof window.okxwallet.request === 'function') {
+            }
+            // Method 3: Try the request method
+            else if (typeof window.okxwallet.request === 'function') {
                 response = await window.okxwallet.request({ method: 'connect' });
-            } else if (window.okxwallet.accounts && window.okxwallet.accounts.length > 0) {
-                // If already connected, get the first account
+            }
+            // Method 4: Check if already connected
+            else if (window.okxwallet.accounts && window.okxwallet.accounts.length > 0) {
                 response = { publicKey: window.okxwallet.accounts[0] };
-            } else {
-                throw new Error('OKX wallet connection method not found');
+            }
+            // Method 5: Try to get current account
+            else if (window.okxwallet.solana && window.okxwallet.solana.publicKey) {
+                response = { publicKey: window.okxwallet.solana.publicKey };
+            }
+            // Method 6: Try to get accounts directly
+            else if (window.okxwallet.getAccounts && typeof window.okxwallet.getAccounts === 'function') {
+                const accounts = await window.okxwallet.getAccounts();
+                if (accounts && accounts.length > 0) {
+                    response = { publicKey: accounts[0] };
+                }
+            }
+            else {
+                throw new Error('OKX wallet connection method not found. Please ensure OKX wallet is properly installed and updated.');
+            }
+            
+            // Validate response
+            if (!response || !response.publicKey) {
+                throw new Error('Failed to get public key from OKX wallet');
             }
             
             return {
@@ -264,6 +290,7 @@ class WalletManager {
                 publicKey: response.publicKey
             };
         } catch (error) {
+            console.error('OKX wallet connection error:', error);
             throw new Error('OKX wallet connection failed: ' + error.message);
         }
     }
@@ -298,7 +325,12 @@ class WalletManager {
                         break;
                     case 'okx':
                         if (window.okxwallet) {
-                            await window.okxwallet.disconnect();
+                            // Try different disconnect methods for OKX wallet
+                            if (window.okxwallet.solana && typeof window.okxwallet.solana.disconnect === 'function') {
+                                await window.okxwallet.solana.disconnect();
+                            } else if (typeof window.okxwallet.disconnect === 'function') {
+                                await window.okxwallet.disconnect();
+                            }
                         }
                         break;
                     case 'coinbase':
@@ -354,7 +386,13 @@ class WalletManager {
                     signature = await window.solana.signMessage(new TextEncoder().encode(message));
                     break;
                 case 'okx':
-                    signature = await window.okxwallet.signMessage(new TextEncoder().encode(message));
+                    if (window.okxwallet.solana && typeof window.okxwallet.solana.signMessage === 'function') {
+                        signature = await window.okxwallet.solana.signMessage(new TextEncoder().encode(message));
+                    } else if (typeof window.okxwallet.signMessage === 'function') {
+                        signature = await window.okxwallet.signMessage(new TextEncoder().encode(message));
+                    } else {
+                        throw new Error('OKX wallet sign message method not available');
+                    }
                     break;
                 case 'coinbase':
                     signature = await window.coinbaseWalletSolana.signMessage(new TextEncoder().encode(message));
@@ -384,7 +422,13 @@ class WalletManager {
                     signature = await window.solana.sendTransaction(transaction);
                     break;
                 case 'okx':
-                    signature = await window.okxwallet.sendTransaction(transaction);
+                    if (window.okxwallet.solana && typeof window.okxwallet.solana.sendTransaction === 'function') {
+                        signature = await window.okxwallet.solana.sendTransaction(transaction);
+                    } else if (typeof window.okxwallet.sendTransaction === 'function') {
+                        signature = await window.okxwallet.sendTransaction(transaction);
+                    } else {
+                        throw new Error('OKX wallet send transaction method not available');
+                    }
                     break;
                 case 'coinbase':
                     signature = await window.coinbaseWalletSolana.sendTransaction(transaction);
@@ -424,14 +468,36 @@ class WalletManager {
         
         // OKX钱包监听器
         if (window.okxwallet) {
-            window.okxwallet.on('connect', () => {
-                console.log('OKX wallet connected');
-            });
-            
-            window.okxwallet.on('disconnect', () => {
-                console.log('OKX wallet disconnected');
-                this.disconnectWallet();
-            });
+            // Try to set up listeners for the new Solana-specific API
+            if (window.okxwallet.solana) {
+                window.okxwallet.solana.on('connect', () => {
+                    console.log('OKX wallet connected');
+                });
+                
+                window.okxwallet.solana.on('disconnect', () => {
+                    console.log('OKX wallet disconnected');
+                    this.disconnectWallet();
+                });
+                
+                window.okxwallet.solana.on('accountChanged', (publicKey) => {
+                    console.log('OKX wallet account changed:', publicKey.toString());
+                    this.walletAddress = publicKey.toString();
+                    if (window.uiManager) {
+                        window.uiManager.updateWalletStatus(true, this.walletAddress);
+                    }
+                });
+            }
+            // Fallback to legacy listeners
+            else if (typeof window.okxwallet.on === 'function') {
+                window.okxwallet.on('connect', () => {
+                    console.log('OKX wallet connected');
+                });
+                
+                window.okxwallet.on('disconnect', () => {
+                    console.log('OKX wallet disconnected');
+                    this.disconnectWallet();
+                });
+            }
         }
         
         // Coinbase钱包监听器
