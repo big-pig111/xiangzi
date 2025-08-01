@@ -10,6 +10,10 @@ class CountdownManager {
         this.holderRewardInterval = null;
         this.saveTimeout = null;
         
+        // Performance optimization flags
+        this.countdownEnding = false;
+        this.holderRewardEnding = false;
+        
         // Game state
         this.gameData = {
             countdownEnded: false,
@@ -193,7 +197,11 @@ class CountdownManager {
         }
         
         this.countdownInterval = setInterval(() => {
-            this.updateCountdownDisplay();
+            try {
+                this.updateCountdownDisplay();
+            } catch (error) {
+                console.error('Countdown display update error:', error);
+            }
         }, 1000);
     }
     
@@ -204,7 +212,11 @@ class CountdownManager {
         }
         
         this.holderRewardInterval = setInterval(() => {
-            this.updateHolderRewardCountdown();
+            try {
+                this.updateHolderRewardCountdown();
+            } catch (error) {
+                console.error('Holder reward countdown update error:', error);
+            }
         }, 1000);
     }
     
@@ -232,16 +244,26 @@ class CountdownManager {
         const minutes = Math.max(0, Math.floor(timeLeft / (1000 * 60)));
         const seconds = Math.max(0, Math.floor((timeLeft % (1000 * 60)) / 1000));
         
-        // 更新显示
+        // 性能优化：只在值发生变化时更新DOM
         const minutesElement = document.getElementById("minutes");
         const secondsElement = document.getElementById("seconds");
         
-        if (minutesElement) minutesElement.innerText = minutes.toString().padStart(2, '0');
-        if (secondsElement) secondsElement.innerText = seconds.toString().padStart(2, '0');
+        if (minutesElement && minutesElement.innerText !== minutes.toString().padStart(2, '0')) {
+            minutesElement.innerText = minutes.toString().padStart(2, '0');
+        }
+        if (secondsElement && secondsElement.innerText !== seconds.toString().padStart(2, '0')) {
+            secondsElement.innerText = seconds.toString().padStart(2, '0');
+        }
         
-        // 倒计时结束处理
+        // 倒计时结束处理 - 使用setTimeout避免阻塞interval
         if (timeLeft < 0 && !this.gameData.countdownEnded) {
-            this.handleCountdownEnded();
+            // 防止重复触发
+            if (!this.countdownEnding) {
+                this.countdownEnding = true;
+                setTimeout(() => {
+                    this.handleCountdownEnded();
+                }, 0);
+            }
         }
     }
     
@@ -261,9 +283,15 @@ class CountdownManager {
             holderRewardElement.innerText = Utils.formatTime(minutes, seconds);
         }
         
-        // 持仓奖励倒计时结束处理
+        // 持仓奖励倒计时结束处理 - 使用setTimeout避免阻塞interval
         if (timeLeft < 0 && !this.gameData.holderRewardEnded) {
-            this.handleHolderRewardEnded();
+            // 防止重复触发
+            if (!this.holderRewardEnding) {
+                this.holderRewardEnding = true;
+                setTimeout(() => {
+                    this.handleHolderRewardEnded();
+                }, 0);
+            }
         }
     }
     
@@ -291,6 +319,9 @@ class CountdownManager {
         if (window.eventBus) {
             window.eventBus.emit('countdownEnded');
         }
+        
+        // 重置标志
+        this.countdownEnding = false;
     }
     
     // 处理持仓奖励倒计时结束
@@ -310,6 +341,9 @@ class CountdownManager {
         if (window.eventBus) {
             window.eventBus.emit('holderRewardEnded');
         }
+        
+        // 重置标志
+        this.holderRewardEnding = false;
     }
     
     // 增加倒计时时间
@@ -350,7 +384,7 @@ class CountdownManager {
             } catch (error) {
                 console.error('保存倒计时状态失败:', error);
             }
-        }, 1000);
+        }, 2000); // 增加延迟到2秒，减少Firebase写入频率
     }
     
     // 保存持仓奖励倒计时状态
@@ -407,13 +441,20 @@ class CountdownManager {
     destroy() {
         if (this.countdownInterval) {
             clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
         }
         if (this.holderRewardInterval) {
             clearInterval(this.holderRewardInterval);
+            this.holderRewardInterval = null;
         }
         if (this.saveTimeout) {
             clearTimeout(this.saveTimeout);
+            this.saveTimeout = null;
         }
+        
+        // 重置性能优化标志
+        this.countdownEnding = false;
+        this.holderRewardEnding = false;
     }
 }
 
